@@ -1,6 +1,40 @@
 # 🌸 Anime Studio Pro — All-In-One Anime Desktop Suite
 
-**Anime Studio Pro** is an enterprise-grade, aesthetic anime automation suite designed for Windows 10/11. It transforms your desktop into an immersive anime experience with ultra-crisp 4K/5K/8K widescreen wallpapers, synchronized viral theme songs and Japanese voice climaxes, full interval customization (5 seconds up to 1 Year+), built-in streaming portals, a floating mini-widget, and Windows System Tray integration.
+**Author:** [Pratik Atpadkar (ATP0925)](https://github.com/ATP0925)  
+**Repository:** [https://github.com/ATP0925/AnimeStudio-Pro](https://github.com/ATP0925/AnimeStudio-Pro)
+
+**Anime Studio Pro** is a fully portable, aesthetic anime automation suite designed for Windows 10/11. It transforms your desktop into an immersive anime experience with ultra-crisp 4K/5K/8K widescreen wallpapers, synchronized viral theme songs and Japanese voice climaxes, full interval customization (5 seconds up to 1 Year+), built-in streaming portals, a floating mini-widget, and Windows System Tray integration.
+
+---
+
+## 🚀 Quick Install (Any Drive: C:, D:, E:, etc.)
+
+Anime Studio Pro is **100% portable**. You can install and run it on **any drive or custom folder** without breaking paths or shortcuts.
+
+### Method 1: 1-Line Universal PowerShell Installer (Recommended)
+Open PowerShell (Win + X $\rightarrow$ Terminal or PowerShell) and paste:
+```powershell
+irm https://raw.githubusercontent.com/ATP0925/AnimeStudio-Pro/main/install.ps1 | iex
+```
+* **Drive Selection**: The installer automatically displays all connected drives (`C:`, `D:`, `E:`, etc.) and their free space, allowing you to choose your preferred target.
+* **Automatic Setup**: It configures Python dependencies (`Pillow`, `psutil`, `pystray`), creates high-res Desktop shortcuts, and sets up the emergency stop button.
+
+---
+
+### Method 2: Git Clone to Any Drive
+```powershell
+# Example: Clone to D: drive
+git clone https://github.com/ATP0925/AnimeStudio-Pro.git D:\AnimeStudio
+cd D:\AnimeStudio
+.\Install_AnimeStudio.bat
+```
+
+---
+
+### Method 3: Direct ZIP Download
+1. Click **Code $\rightarrow$ Download ZIP** on GitHub (or download latest release).
+2. Extract the folder to any drive (e.g., `D:\AnimeStudio` or `E:\AnimeStudio`).
+3. Double-click **`Install_AnimeStudio.bat`** to create Desktop shortcuts and install dependencies.
 
 ---
 
@@ -21,6 +55,7 @@
   10. **Makoto Shinkai Universe** (Your Name, Suzume, Weathering With You 4K)
   11. **Fate Series** (Saber Artoria Excalibur 4K)
   12. **Custom Wallpapers** (Import your own pictures easily)
+  13. **Live Anime Stills** (Automated 4K frame extraction from video loops)
 
 ### 2. ⏱️ Long-Term Scheduler (5 Seconds up to 1 Year+)
 * **Unlimited Customization**: Set rotation interval in Seconds, Minutes, Hours, Days, Weeks, Months, or Years!
@@ -57,35 +92,31 @@
 
 ### 4. 🌐 Built-In Anime Web Portals
 One-click fast links to stream anime and read manga:
-* **HiAnime** (Free 1080p HD Streaming)
+* **Miruro Anime** (1080p Ad-Free Streaming, HiAnime Alternative)
+* **Marin Anime** (Direct Unblocked Streaming)
 * **Crunchyroll** (Official Dubs & Subs)
-* **MangaDex** (Read Free Manga)
-* **Muse Asia** (Legal Free YouTube Streaming)
+* **Muse India** (Legal Free YouTube Streaming)
 * **Lofi Anime Radio** (24/7 Study & Relax Beats)
-* **Toonworld** (Anime Episodes & Batch Downloads)
+* **MangaDex** (Read Free Manga)
 
 ### 5. 🛡️ Windows System Tray & Floating Mini-HUD
 * **System Tray Minimized Mode**: Closing the app window minimizes it to the Windows notification tray (near clock).
 * **Floating Mini-HUD**: Draggable desktop widget showing clock, active anime, and countdown timer.
-* **Emergency Kill Switch**: One click force-stops all wallpaper changes and mutes audio instantly.
+* **Emergency Kill Switch**: `🛑 STOP Anime Mode.bat` force-stops all wallpaper changes and mutes audio instantly.
 
 ---
 
-## 🚀 How to Launch
-
-1. Double-click **`🌸 Anime Studio`** on your Desktop.
-2. Select your desired interval, audio mode, and anime filter.
-3. Click **`💾 SAVE & APPLY`** or **`🎬 NEXT WALLPAPER`**.
-
----
-
-## 📁 Directory Structure
+## 📁 Portable Directory Structure
 
 ```
-C:\Users\atpad\AnimeSetup\
+<ANY_DRIVE>\AnimeStudio\
 │
 ├── AnimeStudio.pyw           # Standalone Windowless Entry Point
 ├── anime_icon.ico            # Official High-Res Anime Application Icon
+├── install.ps1               # Universal 1-Click Online Installer
+├── Install_AnimeStudio.bat   # 1-Click Offline Setup & Shortcut Creator
+├── Launch_Anime_Studio.bat   # Portable Launcher Batch Script
+├── launch_studio.vbs         # Silent Background Launcher
 ├── README.md                 # Complete Project Documentation
 │
 ├── config\
@@ -109,15 +140,17 @@ C:\Users\atpad\AnimeSetup\
 │       ├── 09_Studio_Ghibli\
 │       ├── 10_Makoto_Shinkai\
 │       ├── 11_Fate_Series\
-│       └── 12_Custom_Wallpapers\
+│       ├── 12_Custom_Wallpapers\
+│       └── 13_Live_Anime_Stills\
 │
 └── scripts\
     ├── anime_studio.py       # Master GUI Application & System Tray Host
     ├── anime_auto_engine.py  # 5-Second Transition Overlay & Win32 API Engine
     ├── anime_settings.py     # Configuration, Conversion & Startup Manager
-    └── stop_anime.py         # Emergency Process & Audio Termination Script
+    ├── stop_anime.py         # Emergency Process & Audio Termination Script
+    ├── transition_overlay.py # Smooth Fade & Hardware Video Transition Player
+    └── video_processor.py    # 4K Video Frame Extractor & Transition Manager
 ```
 
 ---
-*Created with ❤️ for ultimate anime pair-programming and desktop aesthetics.*
-
+*Created with ❤️ by **Pratik Atpadkar** for ultimate anime pair-programming and desktop aesthetics.*

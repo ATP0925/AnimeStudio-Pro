@@ -4,7 +4,8 @@ import psutil
 import ctypes
 import subprocess
 
-CONFIG_DIR = r"C:\Users\atpad\AnimeSetup\config"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_DIR = os.path.join(BASE_DIR, "config")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 PID_FILE = os.path.join(CONFIG_DIR, "app.pid")
 RESTORE_FLAG = os.path.join(CONFIG_DIR, "restore_signal.flag")

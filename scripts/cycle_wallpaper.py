@@ -2,8 +2,9 @@ import os
 import ctypes
 import glob
 
-WALLPAPER_DIR = r"C:\Users\atpad\AnimeSetup\wallpapers"
-STATE_FILE = r"C:\Users\atpad\AnimeSetup\current_wallpaper.txt"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WALLPAPER_DIR = os.path.join(BASE_DIR, "wallpapers")
+STATE_FILE = os.path.join(BASE_DIR, "current_wallpaper.txt")
 
 SPI_SETDESKWALLPAPER = 20
 SPIF_UPDATEINIFILE = 0x01

@@ -12,7 +12,7 @@ from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 
 # Base Directories
-BASE_DIR = r"C:\Users\atpad\AnimeSetup"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
 PID_FILE = os.path.join(CONFIG_DIR, "app.pid")
 ICON_PATH = os.path.join(BASE_DIR, "anime_icon.ico")

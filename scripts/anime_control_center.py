@@ -6,7 +6,8 @@ import shutil
 import threading
 import time
 
-sys.path.append(r"C:\Users\atpad\AnimeSetup\scripts")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(BASE_DIR, "scripts"))
 import anime_settings
 import anime_auto_engine
 
@@ -392,7 +393,7 @@ class AnimeControlCenter:
             filetypes=[("Audio Files", "*.mp3 *.wav *.ogg *.m4a")]
         )
         if file_path:
-            dest_dir = r"C:\Users\atpad\AnimeSetup\audio\viral_songs"
+            dest_dir = os.path.join(BASE_DIR, "audio", "viral_songs")
             os.makedirs(dest_dir, exist_ok=True)
             fname = os.path.basename(file_path)
             dest_path = os.path.join(dest_dir, fname)
@@ -417,7 +418,7 @@ class AnimeControlCenter:
             filetypes=[("Image Files", "*.jpg *.png *.jpeg *.webp")]
         )
         if files:
-            dest_dir = r"C:\Users\atpad\AnimeSetup\wallpapers\collection\12_Custom_Wallpapers"
+            dest_dir = os.path.join(BASE_DIR, "wallpapers", "collection", "12_Custom_Wallpapers")
             os.makedirs(dest_dir, exist_ok=True)
             count = 0
             for f in files:

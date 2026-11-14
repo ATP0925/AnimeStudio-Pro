@@ -2,7 +2,9 @@ import os
 import json
 import time
 
-CONFIG_DIR = r"C:\Users\atpad\AnimeSetup\config"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_DIR = os.path.join(BASE_DIR, "config")
+SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 UNIT_MULTIPLIERS = {
@@ -121,9 +123,9 @@ def set_windows_startup(enable=True):
             import win32com.client
             ws = win32com.client.Dispatch("WScript.Shell")
             sc = ws.CreateShortcut(shortcut_path)
-            sc.TargetPath = r"C:\Program Files\Python314\pythonw.exe"
-            sc.Arguments = r'"C:\Users\atpad\AnimeSetup\scripts\anime_hud.py"'
-            sc.WorkingDirectory = r"C:\Users\atpad\AnimeSetup\scripts"
+            sc.TargetPath = sys.executable.replace("python.exe", "pythonw.exe")
+            sc.Arguments = f'"{os.path.join(SCRIPTS_DIR, "anime_hud.py")}"'
+            sc.WorkingDirectory = SCRIPTS_DIR
             sc.Description = "Anime Auto HUD & Scheduled Wallpaper Changer"
             sc.Save()
             update_setting("run_at_startup", True)

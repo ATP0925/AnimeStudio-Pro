@@ -11,7 +11,7 @@ SPI_SETDESKWALLPAPER = 20
 SPIF_UPDATEINIFILE = 0x01
 SPIF_SENDCHANGE = 0x02
 
-BASE_DIR = r"C:\Users\atpad\AnimeSetup"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WALLPAPER_DIR = os.path.join(BASE_DIR, "wallpapers")
 COLLECTION_DIR = os.path.join(WALLPAPER_DIR, "collection")
 SONGS_DIR = os.path.join(BASE_DIR, "audio", "viral_songs")

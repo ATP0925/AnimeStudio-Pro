@@ -4,7 +4,7 @@ color 0A
 echo ========================================================
 echo     ▶️ STARTING ANIME AUTO-WALLPAPER MODE...
 echo ========================================================
-start "" "C:\Program Files\Python314\pythonw.exe" "C:\Users\atpad\AnimeSetup\scripts\anime_hud.py"
+start "" "pythonw" "%~dp0..\scripts\anime_hud.py"
 echo.
 echo ========================================================
 echo   Done! Anime Auto HUD and 4K Wallpapers are ACTIVE.

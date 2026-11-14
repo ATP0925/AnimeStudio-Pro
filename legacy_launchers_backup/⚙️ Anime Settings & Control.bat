@@ -4,7 +4,7 @@ color 0B
 echo ========================================================
 echo   ⚙️ OPENING ANIME SETTINGS ^& CONTROL CENTER...
 echo ========================================================
-start "" "C:\Program Files\Python314\pythonw.exe" "C:\Users\atpad\AnimeSetup\scripts\anime_control_center.py"
+start "" "pythonw" "%~dp0..\scripts\anime_control_center.py"
 echo.
 echo Control Center is open! You can:
 echo  - Change timer (10s, 30s, 1m, 5m, custom)

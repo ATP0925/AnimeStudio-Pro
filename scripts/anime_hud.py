@@ -19,7 +19,9 @@ for p in psutil.process_iter(['pid', 'name', 'cmdline']):
     except:
         pass
 
-sys.path.append(r"C:\Users\atpad\AnimeSetup\scripts")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_DIR = os.path.join(BASE_DIR, "config")
+sys.path.append(os.path.join(BASE_DIR, "scripts"))
 import anime_settings
 import anime_auto_engine
 
@@ -75,10 +77,10 @@ class AnimeHUD:
 
     def open_settings_gui(self):
         try:
-            flag = r"C:\Users\atpad\AnimeSetup\config\restore_signal.flag"
+            flag = os.path.join(CONFIG_DIR, "restore_signal.flag")
             with open(flag, "w") as f:
                 f.write("restore")
-            pid_file = r"C:\Users\atpad\AnimeSetup\config\app.pid"
+            pid_file = os.path.join(CONFIG_DIR, "app.pid")
             running = False
             if os.path.exists(pid_file):
                 try:
@@ -89,7 +91,8 @@ class AnimeHUD:
                     pass
             if not running:
                 import subprocess
-                subprocess.Popen([r"C:\Program Files\Python314\pythonw.exe", r"C:\Users\atpad\AnimeSetup\AnimeStudio.pyw"])
+                pythonw = sys.executable.replace("python.exe", "pythonw.exe")
+                subprocess.Popen([pythonw, os.path.join(BASE_DIR, "AnimeStudio.pyw")])
         except Exception as e:
             print("Error opening AnimeStudio:", e)
 
@@ -405,7 +408,7 @@ class AnimeHUD:
 
             # Check if AnimeStudio is already handling the active rotation
             studio_running = False
-            pid_file = r"C:\Users\atpad\AnimeSetup\config\app.pid"
+            pid_file = os.path.join(CONFIG_DIR, "app.pid")
             if os.path.exists(pid_file):
                 try:
                     with open(pid_file, "r") as pf:

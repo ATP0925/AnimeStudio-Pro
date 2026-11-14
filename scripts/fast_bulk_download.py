@@ -4,7 +4,8 @@ import urllib.parse
 import json
 import concurrent.futures
 
-BASE_WP_DIR = r"C:\Users\atpad\AnimeSetup\wallpapers\collection"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_WP_DIR = os.path.join(BASE_DIR, "wallpapers", "collection")
 os.makedirs(BASE_WP_DIR, exist_ok=True)
 
 CATEGORIES = [
