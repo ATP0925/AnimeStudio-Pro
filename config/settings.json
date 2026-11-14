@@ -1,0 +1,17 @@
+{
+  "interval_value": 10.0,
+  "interval_unit": "seconds",
+  "interval_seconds": 10,
+  "last_change_timestamp": 1794649288.2741997,
+  "next_change_timestamp": 1794649298.2741997,
+  "song_mode": "mute",
+  "specific_song": "original/gojo_domain_expansion.mp3",
+  "anime_filter": "05_Naruto_Shippuden",
+  "show_visual_transition": false,
+  "transition_duration": 5,
+  "play_full_song": false,
+  "sound_enabled": false,
+  "auto_mode_enabled": false,
+  "run_at_startup": false,
+  "minimize_to_tray_on_close": false
+}

@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Windows / Runtime artifacts
+*.pid
+*.flag
+*.log
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# App temporary / state files
+config/app.pid
+config/restore_signal.flag
+config/startup_debug.log
+
+# Discarded / Temporary Wallpaper Dumps
+wallpapers/purged_cheap_or_vertical/
+wallpapers/archive_neo_tokyo/
+wallpapers/streamed/
+
+# User custom wallpapers & temporary video captures
+wallpapers/collection/12_Custom_Wallpapers/*
+!wallpapers/collection/12_Custom_Wallpapers/.gitkeep
+wallpapers/collection/13_Live_Anime_Stills/*
+!wallpapers/collection/13_Live_Anime_Stills/.gitkeep
+videos/transitions/*
+!videos/transitions/.gitkeep
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
