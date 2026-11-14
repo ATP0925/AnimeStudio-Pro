@@ -1,85 +1,99 @@
 ﻿# ==============================================================================
-# 🌸 Anime Studio Pro — Universal Windows Installer
+# 🌸 Anime Studio Pro — Universal Windows 1-Click Installer
 # Author: Pratik Atpadkar (ATP0925)
 # Repository: https://github.com/ATP0925/AnimeStudio-Pro
 # ==============================================================================
 
+param (
+    [string]$Target = ""
+)
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$Host.UI.RawUI.WindowTitle = "🌸 Anime Studio Pro — Universal Installer"
+$ProgressPreference = 'SilentlyContinue'
 
-function Print-Banner {
-    Clear-Host
-    Write-Host "======================================================================" -ForegroundColor Magenta
-    Write-Host "         🌸 ANIME STUDIO PRO — UNIVERSAL DRIVE INSTALLER 🌸           " -ForegroundColor Cyan
-    Write-Host "                   Author: Pratik Atpadkar (ATP0925)                   " -ForegroundColor Yellow
-    Write-Host "======================================================================" -ForegroundColor Magenta
-    Write-Host ""
-}
+Write-Host "======================================================================" -ForegroundColor Magenta
+Write-Host "         🌸 ANIME STUDIO PRO — UNIVERSAL DRIVE INSTALLER 🌸           " -ForegroundColor Cyan
+Write-Host "                   Author: Pratik Atpadkar (ATP0925)                   " -ForegroundColor Yellow
+Write-Host "======================================================================" -ForegroundColor Magenta
+Write-Host ""
 
-Print-Banner
+# -----------------------------------------------------------------------------
+# Step 1: Detect Drives & Destination
+# -----------------------------------------------------------------------------
+Write-Host "[1/5] Detecting best installation drive..." -ForegroundColor Cyan
 
-# Step 1: Detect Available Drives
-Write-Host "[1/6] Scanning available drives and free storage..." -ForegroundColor Cyan
 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -gt 0 } | Select-Object Name, Root, @{Name="FreeGB";Expression={[math]::Round($_.Free / 1GB, 1)}}
 
-Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkGray
-Write-Host "  Drive   Mount Path   Free Space" -ForegroundColor White
-Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkGray
-foreach ($d in $drives) {
-    Write-Host ("  {0}:      {1,-12} {2} GB Free" -f $d.Name, $d.Root, $d.FreeGB) -ForegroundColor Green
-}
-Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkGray
-Write-Host ""
-
-# Determine recommended default drive (Prefer D: or E: if > 5GB, else C:)
-$recommendedDrive = "C:"
+# Prefer D: or E: if they have at least 5 GB, otherwise C:
+$bestDrive = "C:"
 $dDrive = $drives | Where-Object { $_.Name -eq "D" -and $_.FreeGB -ge 5 }
 $eDrive = $drives | Where-Object { $_.Name -eq "E" -and $_.FreeGB -ge 5 }
-if ($dDrive) { $recommendedDrive = "D:" }
-elseif ($eDrive) { $recommendedDrive = "E:" }
+if ($dDrive) { $bestDrive = "D:" }
+elseif ($eDrive) { $bestDrive = "E:" }
 
-$defaultPath = "$recommendedDrive\AnimeStudio"
+$defaultPath = "$bestDrive\AnimeStudio"
 
-Write-Host "Where would you like to install Anime Studio Pro?" -ForegroundColor Yellow
-Write-Host "Press [ENTER] to use default: " -NoNewline -ForegroundColor White
-Write-Host "$defaultPath" -ForegroundColor Cyan
-$userChoice = Read-Host "Or enter target folder path (e.g., D:\AnimeStudio, E:\Games\AnimeStudio)"
-
-$installDir = if ([string]::IsNullOrWhiteSpace($userChoice)) { $defaultPath } else { $userChoice.Trim().TrimEnd('\') }
-
-Write-Host "`n[✓] Selected Installation Target: " -NoNewline -ForegroundColor White
-Write-Host "$installDir" -ForegroundColor Green
-Write-Host ""
-
-# Step 2: Ensure Target Directory Exists
-if (-not (Test-Path $installDir)) {
-    Write-Host "[2/6] Creating installation directory at $installDir..." -ForegroundColor Cyan
-    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+if ([string]::IsNullOrWhiteSpace($Target)) {
+    $isPiped = [Console]::IsInputRedirected
+    if (-not $isPiped -and [Environment]::UserInteractive) {
+        Write-Host "Available Drives:" -ForegroundColor DarkGray
+        foreach ($d in $drives) {
+            Write-Host ("  {0}: ({1} GB free)" -f $d.Name, $d.FreeGB) -ForegroundColor Green
+        }
+        Write-Host "`nWhere would you like to install Anime Studio Pro?" -ForegroundColor Yellow
+        Write-Host "Press [ENTER] for default ($defaultPath) or type custom path: " -NoNewline -ForegroundColor White
+        try {
+            $userInput = Read-Host
+            if (-not [string]::IsNullOrWhiteSpace($userInput)) {
+                $installDir = $userInput.Trim().TrimEnd('\')
+            } else {
+                $installDir = $defaultPath
+            }
+        } catch {
+            $installDir = $defaultPath
+        }
+    } else {
+        $installDir = $defaultPath
+    }
 } else {
-    Write-Host "[2/6] Target directory exists: $installDir" -ForegroundColor Cyan
+    $installDir = $Target.Trim().TrimEnd('\')
 }
 
-# Step 3: Download or Clone Repository
-$repoUrl = "https://github.com/ATP0925/AnimeStudio-Pro.git"
-$zipUrl = "https://github.com/ATP0925/AnimeStudio-Pro/archive/refs/heads/main.zip"
+Write-Host "`n[✓] Target Installation Folder: $installDir" -ForegroundColor Green
 
-Write-Host "`n[3/6] Fetching Anime Studio Pro files..." -ForegroundColor Cyan
+# -----------------------------------------------------------------------------
+# Step 2: Download / Clone Project Files
+# -----------------------------------------------------------------------------
+Write-Host "`n[2/5] Downloading Anime Studio Pro..." -ForegroundColor Cyan
+
+$repoUrl = "https://github.com/ATP0925/AnimeStudio-Pro.git"
 $hasGit = Get-Command git -ErrorAction SilentlyContinue
 
-$animeStudioFile = Join-Path $installDir "AnimeStudio.pyw"
-if (-not (Test-Path $animeStudioFile)) {
+$animeMainFile = Join-Path $installDir "AnimeStudio.pyw"
+
+if (-not (Test-Path $animeMainFile)) {
     if ($hasGit) {
-        Write-Host " -> Git detected! Cloning repository directly..." -ForegroundColor Green
+        Write-Host " -> Cloning repository via Git (clean depth=1)..." -ForegroundColor White
         git clone --depth 1 $repoUrl $installDir
     } else {
-        Write-Host " -> Git not found. Downloading repository package via HTTPS..." -ForegroundColor Yellow
-        $tempZip = Join-Path $env:TEMP "AnimeStudio_setup.zip"
+        Write-Host " -> Git not found. Streaming package directly from GitHub..." -ForegroundColor White
+        if (-not (Test-Path $installDir)) {
+            New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+        }
+        $zipUrl = "https://github.com/ATP0925/AnimeStudio-Pro/archive/refs/heads/main.zip"
+        $tempZip = Join-Path $env:TEMP "AnimeStudio_release.zip"
         $tempExtract = Join-Path $env:TEMP "AnimeStudio_extract"
 
-        Write-Host " -> Downloading from GitHub (this may take a moment for 4K wallpapers)..." -ForegroundColor White
-        Invoke-WebRequest -Uri $zipUrl -OutFile $tempZip
+        $hasCurl = Get-Command curl.exe -ErrorAction SilentlyContinue
+        if ($hasCurl) {
+            curl.exe -L -k -o "$tempZip" "$zipUrl"
+        } else {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $webClient = New-Object System.Net.WebClient
+            $webClient.DownloadFile($zipUrl, $tempZip)
+        }
 
-        Write-Host " -> Extracting files into $installDir..." -ForegroundColor White
+        Write-Host " -> Extracting files to $installDir..." -ForegroundColor White
         if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract }
         Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
 
@@ -91,108 +105,64 @@ if (-not (Test-Path $animeStudioFile)) {
         Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue
     }
 } else {
-    Write-Host " -> Existing installation detected in $installDir. Skipping re-download." -ForegroundColor Green
+    Write-Host " -> Existing installation detected at $installDir. Updating..." -ForegroundColor Green
+    if (Test-Path (Join-Path $installDir ".git")) {
+        git -C $installDir pull
+    }
 }
 
-# Step 4: Python & Dependencies Check
-Write-Host "`n[4/6] Checking Python runtime..." -ForegroundColor Cyan
+# -----------------------------------------------------------------------------
+# Step 3: Python Environment & Packages
+# -----------------------------------------------------------------------------
+Write-Host "`n[3/5] Setting up Python dependencies..." -ForegroundColor Cyan
+
 $hasPython = Get-Command python -ErrorAction SilentlyContinue
 if (-not $hasPython) {
-    Write-Host " [!] Python is not installed on this system!" -ForegroundColor Red
-    Write-Host " Attempting automatic Python 3.12 installation via winget..." -ForegroundColor Yellow
+    Write-Host " [!] Python is not installed! Installing Python automatically via winget..." -ForegroundColor Yellow
     $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
     if ($hasWinget) {
         winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     } else {
-        Write-Host " Please download and install Python from: https://www.python.org/downloads/" -ForegroundColor Red
-        Write-Host " Ensure you check 'Add Python to PATH' during installation!" -ForegroundColor Yellow
-        pause
+        Write-Host " Please install Python 3.10+ from https://www.python.org/downloads/ and check 'Add to PATH'" -ForegroundColor Red
+    }
+}
+
+python -m pip install --upgrade pip pillow psutil pystray --quiet
+Write-Host " [✓] Dependencies verified!" -ForegroundColor Green
+
+# -----------------------------------------------------------------------------
+# Step 4: GUARANTEED Desktop Shortcuts Creation
+# -----------------------------------------------------------------------------
+Write-Host "`n[4/5] Creating Desktop & Start Menu Shortcuts..." -ForegroundColor Cyan
+
+$createShortcutsScript = Join-Path $installDir "scripts\create_shortcuts.py"
+if (Test-Path $createShortcutsScript) {
+    python "$createShortcutsScript" "$installDir"
+}
+
+# -----------------------------------------------------------------------------
+# Step 5: Launch Prompt
+# -----------------------------------------------------------------------------
+Write-Host "`n======================================================================" -ForegroundColor Magenta
+Write-Host "       🎉 ANIME STUDIO PRO INSTALLATION COMPLETE!                     " -ForegroundColor Green
+Write-Host "======================================================================" -ForegroundColor Magenta
+Write-Host "Direct Shortcuts Created On Your Device Desktop:" -ForegroundColor White
+Write-Host "  👉 🌸 Anime Studio.lnk" -ForegroundColor Cyan
+Write-Host "  👉 🛑 STOP Anime Mode.bat" -ForegroundColor Cyan
+Write-Host "  👉 🎌 Anime Hub" -ForegroundColor Cyan
+Write-Host "======================================================================`n" -ForegroundColor Magenta
+
+$targetScript = Join-Path $installDir "AnimeStudio.pyw"
+$pythonwPath = (Get-Command pythonw -ErrorAction SilentlyContinue).Source
+if (-not $pythonwPath) { $pythonwPath = (Get-Command python -ErrorAction SilentlyContinue).Source }
+
+if (-not [Console]::IsInputRedirected -and [Environment]::UserInteractive) {
+    $ans = Read-Host "Start Anime Studio Pro now? [Y/n]"
+    if ($ans -notmatch "n|N") {
+        Start-Process -FilePath $pythonwPath -ArgumentList "`"$targetScript`"" -WorkingDirectory $installDir
     }
 } else {
-    Write-Host " [✓] Python detected: $((Get-Command python).Source)" -ForegroundColor Green
-}
-
-Write-Host " Installing required Python libraries (Pillow, psutil)..." -ForegroundColor Cyan
-python -m pip install --upgrade pip pillow psutil pystray --quiet
-
-# Step 5: Create Desktop Shortcuts
-Write-Host "`n[5/6] Creating Desktop shortcuts..." -ForegroundColor Cyan
-
-$desktopDir = [System.Environment]::GetFolderPath('Desktop')
-if (Test-Path "$env:USERPROFILE\OneDrive\Desktop") {
-    $desktopDir = "$env:USERPROFILE\OneDrive\Desktop"
-}
-
-$WshShell = New-Object -ComObject WScript.Shell
-$iconPath = Join-Path $installDir "anime_icon.ico"
-$targetScript = Join-Path $installDir "AnimeStudio.pyw"
-
-# 1. Main Anime Studio Shortcut
-$shortcutPath = Join-Path $desktopDir "🌸 Anime Studio.lnk"
-$shortcut = $WshShell.CreateShortcut($shortcutPath)
-$pythonwPath = (Get-Command pythonw -ErrorAction SilentlyContinue).Source
-if (-not $pythonwPath) {
-    $pythonwPath = (Get-Command python -ErrorAction SilentlyContinue).Source
-}
-$shortcut.TargetPath = $pythonwPath
-$shortcut.Arguments = "`"$targetScript`""
-$shortcut.WorkingDirectory = $installDir
-if (Test-Path $iconPath) {
-    $shortcut.IconLocation = "$iconPath,0"
-}
-$shortcut.Description = "Launch Anime Studio Pro (4K Wallpapers & Viral Audio)"
-$shortcut.Save()
-Write-Host " [✓] Created Desktop Shortcut: 🌸 Anime Studio.lnk" -ForegroundColor Green
-
-# 2. Emergency Kill Switch Shortcut
-$stopBatSrc = Join-Path $installDir "scripts\stop_anime.py"
-$stopBatDst = Join-Path $desktopDir "🛑 STOP Anime Mode.bat"
-$stopBatContent = @"
-@echo off
-title Emergency Stop Anime Mode
-echo Stopping Anime Studio Pro and MCI Audio...
-python "$stopBatSrc"
-exit /b 0
-"@
-Set-Content -Path $stopBatDst -Value $stopBatContent -Encoding ASCII
-Write-Host " [✓] Created Desktop Kill-Switch: 🛑 STOP Anime Mode.bat" -ForegroundColor Green
-
-# 3. Create Anime Hub Folder on Desktop
-$animeHubDir = Join-Path $desktopDir "🎌 Anime Hub"
-if (-not (Test-Path $animeHubDir)) {
-    New-Item -ItemType Directory -Path $animeHubDir -Force | Out-Null
-}
-
-# Create Anime Portals
-$portals = @{
-    "⚡ Miruro Anime (1080p Ad-Free).url" = "https://miruro.to"
-    "⚡ Marin Anime (Direct Unblocked).url" = "https://marin.moe"
-    "🎬 Crunchyroll (Official Streaming).url" = "https://www.crunchyroll.com"
-    "📺 Muse India (YouTube Official).url" = "https://www.youtube.com/@MuseIndia"
-    "🌸 Lofi Anime Radio (24x7 Beats).url" = "https://www.youtube.com/watch?v=jfKfPfyJRdk"
-}
-
-foreach ($item in $portals.GetEnumerator()) {
-    $uPath = Join-Path $animeHubDir $item.Key
-    $uContent = "[InternetShortcut]`r`nURL=$($item.Value)`r`n"
-    [System.IO.File]::WriteAllText($uPath, $uContent)
-}
-Write-Host " [✓] Created Desktop Hub: 🎌 Anime Hub" -ForegroundColor Green
-
-# Step 6: Installation Complete
-Write-Host "`n======================================================================" -ForegroundColor Magenta
-Write-Host "       🎉 ANIME STUDIO PRO SUCCESSFULLY INSTALLED TO $installDir!     " -ForegroundColor Green
-Write-Host "======================================================================" -ForegroundColor Magenta
-Write-Host "Desktop Shortcuts Ready:" -ForegroundColor White
-Write-Host "  1. 🌸 Anime Studio.lnk    -> Launch Studio GUI" -ForegroundColor Cyan
-Write-Host "  2. 🛑 STOP Anime Mode.bat  -> Stop & Mute All Immediately" -ForegroundColor Cyan
-Write-Host "  3. 🎌 Anime Hub           -> Watch 1080p Anime Online" -ForegroundColor Cyan
-Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkGray
-Write-Host ""
-
-$runNow = Read-Host "Would you like to start Anime Studio Pro now? [Y/n]"
-if ($runNow -notmatch "n|N") {
-    Write-Host "Launching Anime Studio Pro..." -ForegroundColor Magenta
+    Write-Host "Launching Anime Studio Pro in background..." -ForegroundColor Green
     Start-Process -FilePath $pythonwPath -ArgumentList "`"$targetScript`"" -WorkingDirectory $installDir
 }
