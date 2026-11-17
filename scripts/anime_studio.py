@@ -3,6 +3,7 @@ import sys
 import time
 import atexit
 import threading
+import subprocess
 import webbrowser
 import shutil
 import ctypes
@@ -10,6 +11,15 @@ import psutil
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
+
+# Set High-DPI Awareness on Windows for crystal-sharp text and graphics
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 try:
     import windnd
@@ -27,15 +37,15 @@ SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-# Robust PID Lock single-instance enforcement
+# Single-Instance Enforcement via PID
 os.makedirs(CONFIG_DIR, exist_ok=True)
 RESTORE_SIGNAL_FILE = os.path.join(CONFIG_DIR, "restore_signal.flag")
 if os.path.exists(PID_FILE):
     try:
         with open(PID_FILE, "r") as f:
-            content = f.read().strip()
-        if content.isdigit():
-            old_pid = int(content)
+            content_pid = f.read().strip()
+        if content_pid.isdigit():
+            old_pid = int(content_pid)
             if psutil.pid_exists(old_pid) and old_pid != os.getpid():
                 p = psutil.Process(old_pid)
                 cmdline = ' '.join(p.cmdline() or []).lower()
@@ -57,6 +67,7 @@ from pystray import MenuItem as item
 import anime_settings
 import anime_auto_engine
 
+# Streaming & Web Portals Catalog
 PORTALS = [
     ("📺 Bilibili Anime (Bstation)", "100% Free 1080p HD Anime Streaming (Zero ISP Blocks in India)", "https://www.bilibili.tv/en", "#00f5d4"),
     ("🎬 Crunchyroll Anime", "Official Free Anime Streaming, Dubs & Subs", "https://www.crunchyroll.com", "#ffbe0b"),
@@ -68,13 +79,32 @@ PORTALS = [
     ("🌸 Lofi Anime Radio", "24/7 Relaxing Anime Beats to Study/Relax", "https://www.youtube.com/watch?v=jfKfPfyJRdk", "#a2d2ff")
 ]
 
+def add_hover(widget, normal_bg, hover_bg, normal_fg=None, hover_fg=None):
+    """Add smooth hover effects to buttons and cards."""
+    def on_enter(e):
+        try:
+            widget.config(bg=hover_bg)
+            if hover_fg:
+                widget.config(fg=hover_fg)
+        except Exception:
+            pass
+    def on_leave(e):
+        try:
+            widget.config(bg=normal_bg)
+            if normal_fg:
+                widget.config(fg=normal_fg)
+        except Exception:
+            pass
+    widget.bind("<Enter>", on_enter)
+    widget.bind("<Leave>", on_leave)
+
 class AnimeStudioApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("🌸 Anime Studio Pro — All-In-One Anime Desktop Suite")
-        self.root.geometry("860x650")
-        self.root.minsize(800, 600)
-        self.root.configure(bg="#0c0a17")
+        self.root.title("🌸 Anime Studio Pro — 4K Desktop Suite")
+        self.root.geometry("980x690")
+        self.root.minsize(920, 640)
+        self.root.configure(bg="#0c0a18")
 
         if os.path.exists(ICON_PATH):
             try:
@@ -85,9 +115,9 @@ class AnimeStudioApp:
         # Center on screen
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        x = max(10, (sw - 860) // 2)
-        y = max(10, (sh - 650) // 2)
-        self.root.geometry(f"860x650+{x}+{y}")
+        x = max(10, (sw - 980) // 2)
+        y = max(10, (sh - 690) // 2)
+        self.root.geometry(f"980x690+{x}+{y}")
 
         self.settings = anime_settings.load_settings()
         self.auto_change_enabled = self.settings.get("auto_mode_enabled", True)
@@ -95,7 +125,7 @@ class AnimeStudioApp:
         self.animation_enabled = self.settings.get("show_visual_transition", True)
         self.is_changing = False
 
-        # Reset past schedule on startup so it never immediately auto-plays on boot
+        # Reset past schedule on startup so it doesn't immediately change on boot
         now = time.time()
         if self.settings.get("next_change_timestamp", 0) <= now:
             interval = max(5, self.settings.get("interval_seconds", 30))
@@ -117,69 +147,140 @@ class AnimeStudioApp:
         self.custom_wallpapers_list = []
         self.custom_img_refs = []
 
+        # In-memory thumbnail cache for ultra-fast navigation
+        self.thumb_cache = {}
+
+        # Configure dark ttk theme
+        self.setup_ttk_styles()
+
         self.setup_ui()
         self.setup_system_tray()
 
-        # Setup global Drag & Drop hook
+        # Setup Drag & Drop Hook
         if HAS_WINDND:
             try:
                 windnd.hook_dropfiles(self.root, func=self.handle_drag_drop_files, force_unicode=True)
             except Exception as e:
                 print("Drag and drop hook warning:", e)
+
         self.show_tab("dashboard")
 
-        # Window close handler (Prompts or respects preferences)
+        # Window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_close_clicked)
 
-        # Background timer loops & signal watchers
+        # Background loops
         self.check_restore_signal()
         self.update_timer_loop()
 
-        # Load first display
+        # Initial display
         self.refresh_current_display()
+
+    def setup_ttk_styles(self):
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except:
+            pass
+        style.configure(
+            "TCombobox",
+            fieldbackground="#16122a",
+            background="#251e44",
+            foreground="#ffffff",
+            darkcolor="#16122a",
+            lightcolor="#251e44",
+            arrowcolor="#00f5d4"
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", "#16122a")],
+            selectbackground=[("readonly", "#251e44")],
+            selectforeground=[("readonly", "#00f5d4")]
+        )
+        style.configure(
+            "Vertical.TScrollbar",
+            gripcount=0,
+            background="#251e44",
+            darkcolor="#16122a",
+            lightcolor="#251e44",
+            troughcolor="#0c0a18",
+            bordercolor="#0c0a18",
+            arrowcolor="#00f5d4"
+        )
+
+    def get_thumbnail(self, path, size=(160, 90)):
+        key = (path, size)
+        if key in self.thumb_cache:
+            return self.thumb_cache[key]
+        try:
+            im = Image.open(path)
+            im.thumbnail(size, Image.Resampling.LANCZOS)
+            tk_im = ImageTk.PhotoImage(im)
+            self.thumb_cache[key] = tk_im
+            return tk_im
+        except Exception:
+            return None
 
     # ========================== UI SETUP ==========================
     def setup_ui(self):
-        self.main_container = tk.Frame(self.root, bg="#0c0a17")
+        self.main_container = tk.Frame(self.root, bg="#0c0a18")
         self.main_container.pack(fill="both", expand=True)
 
         # --- LEFT SIDEBAR ---
-        self.sidebar = tk.Frame(self.main_container, bg="#120e24", width=205)
+        self.sidebar = tk.Frame(self.main_container, bg="#110d22", width=225)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
-        # Logo / Branding
-        brand_frame = tk.Frame(self.sidebar, bg="#120e24", pady=16)
+        # Branding Header
+        brand_frame = tk.Frame(self.sidebar, bg="#110d22", pady=18, padx=12)
         brand_frame.pack(fill="x")
 
         lbl_logo = tk.Label(
             brand_frame,
             text="🌸 ANIME STUDIO",
-            font=("Segoe UI", 12, "bold"),
+            font=("Segoe UI", 13, "bold"),
             fg="#00f5d4",
-            bg="#120e24"
+            bg="#110d22"
         )
         lbl_logo.pack()
 
+        badge_row = tk.Frame(brand_frame, bg="#110d22")
+        badge_row.pack(pady=(2, 0))
+
         lbl_badge = tk.Label(
-            brand_frame,
-            text="PRO DESKTOP SUITE",
+            badge_row,
+            text="PRO SUITE",
             font=("Segoe UI", 7, "bold"),
             fg="#ffe600",
-            bg="#120e24"
+            bg="#20173d",
+            padx=5,
+            pady=1
         )
-        lbl_badge.pack()
+        lbl_badge.pack(side="left", padx=2)
 
-        # Navigation buttons
+        lbl_v = tk.Label(
+            badge_row,
+            text="v2.5 ULTRA",
+            font=("Segoe UI", 7, "bold"),
+            fg="#ff0055",
+            bg="#20173d",
+            padx=5,
+            pady=1
+        )
+        lbl_v.pack(side="left", padx=2)
+
+        # Navigation Divider Line
+        tk.Frame(self.sidebar, bg="#231a44", height=1).pack(fill="x", padx=12, pady=(0, 8))
+
+        # Navigation Buttons
         self.nav_buttons = {}
         navs = [
-            ("dashboard", "🏠 Dashboard"),
-            ("custom", "🎨 Custom Wallpapers"),
-            ("timer", "⏱️ Timer & Schedule"),
-            ("audio", "🎵 Music & Voice"),
-            ("gallery", "🖼️ Wallpapers (4K)"),
-            ("portals", "🌐 Anime Portals"),
-            ("settings", "⚙️ App Preferences")
+            ("dashboard", "🏠  Dashboard"),
+            ("custom", "🎨  Custom Wallpapers"),
+            ("gallery", "🖼️  4K Wallpaper Gallery"),
+            ("timer", "⏱️  Timer & Schedule"),
+            ("audio", "🎵  Music & Japanese Voice"),
+            ("portals", "🌐  Anime Portals"),
+            ("settings", "⚙️  Preferences & Updates")
         ]
 
         for tab_id, tab_label in navs:
@@ -187,52 +288,61 @@ class AnimeStudioApp:
                 self.sidebar,
                 text=f"  {tab_label}",
                 font=("Segoe UI", 9, "bold"),
-                bg="#120e24",
+                bg="#110d22",
                 fg="#b8b5cb",
-                activebackground="#1f183d",
+                activebackground="#1d163a",
                 activeforeground="#00f5d4",
                 relief="flat",
                 anchor="w",
                 padx=12,
-                pady=8,
+                pady=9,
                 cursor="hand2",
                 command=lambda tid=tab_id: self.show_tab(tid)
             )
-            btn.pack(fill="x", pady=2)
+            btn.pack(fill="x", padx=8, pady=2)
+            add_hover(btn, normal_bg="#110d22", hover_bg="#1d163a", normal_fg="#b8b5cb", hover_fg="#ffffff")
             self.nav_buttons[tab_id] = btn
 
-        # Status Pill at bottom of sidebar
-        status_box = tk.Frame(self.sidebar, bg="#1a1433", padx=8, pady=10)
-        status_box.pack(side="bottom", fill="x", padx=10, pady=12)
+        # Status & Stats Card at Bottom of Sidebar
+        status_box = tk.Frame(self.sidebar, bg="#17112e", padx=10, pady=12, highlightbackground="#2d2252", highlightthickness=1)
+        status_box.pack(side="bottom", fill="x", padx=10, pady=14)
 
         self.lbl_status_badge = tk.Label(
             status_box,
             text="🟢 AUTO-MODE: ON" if self.auto_change_enabled else "🔴 AUTO-MODE: PAUSED",
             font=("Segoe UI", 8, "bold"),
             fg="#00f5d4" if self.auto_change_enabled else "#ff5964",
-            bg="#1a1433"
+            bg="#17112e"
         )
         self.lbl_status_badge.pack(anchor="w")
 
         self.lbl_sidebar_timer = tk.Label(
             status_box,
             text="⏳ Next in: Calculating...",
-            font=("Segoe UI", 7),
+            font=("Segoe UI", 7, "bold"),
             fg="#ffe600",
-            bg="#1a1433"
+            bg="#17112e"
         )
-        self.lbl_sidebar_timer.pack(anchor="w", pady=(2, 0))
+        self.lbl_sidebar_timer.pack(anchor="w", pady=(3, 0))
+
+        tk.Label(
+            status_box,
+            text="🖼️ 301+ UHD 4K Wallpapers",
+            font=("Segoe UI", 7),
+            fg="#8d88ab",
+            bg="#17112e"
+        ).pack(anchor="w", pady=(2, 0))
 
         # --- RIGHT CONTENT CONTAINER ---
-        self.content_area = tk.Frame(self.main_container, bg="#0c0a17", padx=16, pady=14)
+        self.content_area = tk.Frame(self.main_container, bg="#0c0a18", padx=16, pady=14)
         self.content_area.pack(side="right", fill="both", expand=True)
 
         self.tabs = {}
         self.build_dashboard_tab()
         self.build_custom_tab()
+        self.build_gallery_tab()
         self.build_timer_tab()
         self.build_audio_tab()
-        self.build_gallery_tab()
         self.build_portals_tab()
         self.build_settings_tab()
 
@@ -242,65 +352,182 @@ class AnimeStudioApp:
         for tid, btn in self.nav_buttons.items():
             if tid == tab_id:
                 btn.config(bg="#ff0055", fg="#ffffff")
+                add_hover(btn, normal_bg="#ff0055", hover_bg="#e0004c", normal_fg="#ffffff", hover_fg="#ffffff")
             else:
-                btn.config(bg="#120e24", fg="#b8b5cb")
+                btn.config(bg="#110d22", fg="#b8b5cb")
+                add_hover(btn, normal_bg="#110d22", hover_bg="#1d163a", normal_fg="#b8b5cb", hover_fg="#ffffff")
 
         if tab_id in self.tabs:
             self.tabs[tab_id].pack(fill="both", expand=True)
             if tab_id == "custom":
                 self.refresh_custom_wallpapers_grid()
+            elif tab_id == "gallery":
+                self.load_gallery_thumbnails()
 
     # ========================== TAB 1: DASHBOARD ==========================
     def build_dashboard_tab(self):
-        tab = tk.Frame(self.content_area, bg="#0c0a17")
+        tab = tk.Frame(self.content_area, bg="#0c0a18")
         self.tabs["dashboard"] = tab
 
-        top_row = tk.Frame(tab, bg="#0c0a17")
+        # Top Header Bar
+        top_row = tk.Frame(tab, bg="#0c0a18")
         top_row.pack(fill="x", pady=(0, 10))
 
-        lbl_head = tk.Label(top_row, text="DASHBOARD & LIVE MONITOR", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17")
+        lbl_head = tk.Label(top_row, text="DASHBOARD & LIVE MONITOR", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a18")
         lbl_head.pack(side="left")
 
-        grid_frame = tk.Frame(tab, bg="#0c0a17")
+        stats_badge = tk.Label(
+            top_row,
+            text="✨ 4K/5K/8K ULTRA HIGH-RES • ZERO COMPRESSION",
+            font=("Segoe UI", 8, "bold"),
+            fg="#00f5d4",
+            bg="#181232",
+            padx=10,
+            pady=3
+        )
+        stats_badge.pack(side="right")
+
+        # Two Main Hero Cards Grid
+        grid_frame = tk.Frame(tab, bg="#0c0a18")
         grid_frame.pack(fill="both", expand=True)
 
-        # Left Card: Live Wallpaper Preview
-        preview_card = tk.Frame(grid_frame, bg="#16122a", padx=12, pady=12, highlightbackground="#00f5d4", highlightthickness=1)
+        # --- LEFT HERO CARD: 4K PREVIEW ---
+        preview_card = tk.Frame(grid_frame, bg="#16122a", padx=14, pady=12, highlightbackground="#00f5d4", highlightthickness=1)
         preview_card.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        lbl_p_title = tk.Label(preview_card, text="ACTIVE 4K WALLPAPER", font=("Segoe UI", 8, "bold"), fg="#00f5d4", bg="#16122a")
-        lbl_p_title.pack(anchor="w")
+        p_header = tk.Frame(preview_card, bg="#16122a")
+        p_header.pack(fill="x")
 
-        self.lbl_preview_canvas = tk.Label(preview_card, bg="#0c0817", text="Loading Preview...", fg="#b8b5cb", width=34, height=10)
-        self.lbl_preview_canvas.pack(fill="both", expand=True, pady=6)
+        lbl_p_title = tk.Label(p_header, text="ACTIVE DESKTOP WALLPAPER", font=("Segoe UI", 8, "bold"), fg="#00f5d4", bg="#16122a")
+        lbl_p_title.pack(side="left")
+
+        self.lbl_active_res = tk.Label(p_header, text="3840x2160 UHD 4K", font=("Segoe UI", 7, "bold"), fg="#00f5d4", bg="#20173d", padx=6, pady=1)
+        self.lbl_active_res.pack(side="right")
+
+        self.lbl_preview_canvas = tk.Label(
+            preview_card,
+            bg="#0c0817",
+            text="Loading 4K Preview...",
+            fg="#b8b5cb",
+            width=36,
+            height=11,
+            cursor="hand2"
+        )
+        self.lbl_preview_canvas.pack(fill="both", expand=True, pady=8)
+        self.lbl_preview_canvas.bind("<Button-1>", lambda e: self.open_active_file())
 
         preview_footer = tk.Frame(preview_card, bg="#16122a")
         preview_footer.pack(fill="x")
 
-        self.lbl_active_wp_name = tk.Label(preview_footer, text="4k_anime_masterpiece.png", font=("Segoe UI", 8, "italic"), fg="#b8b5cb", bg="#16122a")
+        self.lbl_active_wp_name = tk.Label(
+            preview_footer,
+            text="4k_anime_masterpiece.png",
+            font=("Segoe UI", 8, "italic"),
+            fg="#b8b5cb",
+            bg="#16122a",
+            wraplength=280,
+            justify="left"
+        )
         self.lbl_active_wp_name.pack(side="left")
 
-        self.lbl_active_res = tk.Label(preview_footer, text="3840x2160 UHD", font=("Segoe UI", 7, "bold"), fg="#00f5d4", bg="#1f183d", padx=4)
-        self.lbl_active_res.pack(side="right")
+        btn_open_file = tk.Button(
+            preview_footer,
+            text="📂 Open File",
+            font=("Segoe UI", 7, "bold"),
+            bg="#20173d",
+            fg="#00f5d4",
+            relief="flat",
+            cursor="hand2",
+            padx=6,
+            pady=2,
+            command=self.open_active_file
+        )
+        btn_open_file.pack(side="right")
+        add_hover(btn_open_file, "#20173d", "#2d2054")
 
-        # Right Card: Anime Theme Details & Audio
-        info_card = tk.Frame(grid_frame, bg="#16122a", padx=14, pady=12, highlightbackground="#ff0055", highlightthickness=1)
+        # --- RIGHT HERO CARD: ANIME THEME & AUDIO ---
+        info_card = tk.Frame(grid_frame, bg="#16122a", padx=16, pady=12, highlightbackground="#ff0055", highlightthickness=1)
         info_card.pack(side="right", fill="both", expand=True, padx=(8, 0))
 
         tk.Label(info_card, text="ANIME THEME & AUDIO TRACK", font=("Segoe UI", 8, "bold"), fg="#ff0055", bg="#16122a").pack(anchor="w")
 
         self.lbl_active_anime = tk.Label(info_card, text="One Piece", font=("Segoe UI", 14, "bold"), fg="#ffe600", bg="#16122a")
-        self.lbl_active_anime.pack(anchor="w", pady=(6, 0))
+        self.lbl_active_anime.pack(anchor="w", pady=(4, 0))
 
-        self.lbl_active_char = tk.Label(info_card, text="Monkey D. Luffy (Gear 5)", font=("Segoe UI", 10, "bold"), fg="#00f5d4", bg="#16122a")
+        self.lbl_active_char = tk.Label(info_card, text="Monkey D. Luffy (Gear 5 Drums of Liberation)", font=("Segoe UI", 10, "bold"), fg="#00f5d4", bg="#16122a")
         self.lbl_active_char.pack(anchor="w", pady=(1, 8))
 
-        audio_box = tk.Frame(info_card, bg="#0c0817", padx=10, pady=8)
+        # Audio Box with live equalizer text
+        audio_box = tk.Frame(info_card, bg="#0c0817", padx=12, pady=10, highlightbackground="#2d224e", highlightthickness=1)
         audio_box.pack(fill="x", pady=4)
 
-        tk.Label(audio_box, text="🎵 PLAYING TRACK:", font=("Segoe UI", 7, "bold"), fg="#ffbe0b", bg="#0c0817").pack(anchor="w")
-        self.lbl_active_song = tk.Label(audio_box, text="Overtaken (The Legendary Walk Theme)", font=("Segoe UI", 9, "bold"), fg="#ffffff", bg="#0c0817", wraplength=260, justify="left")
-        self.lbl_active_song.pack(anchor="w", pady=(2, 0))
+        aud_top = tk.Frame(audio_box, bg="#0c0817")
+        aud_top.pack(fill="x")
+
+        tk.Label(aud_top, text="🎵 SOUNDTRACK / VOICE:", font=("Segoe UI", 7, "bold"), fg="#ffbe0b", bg="#0c0817").pack(side="left")
+        self.lbl_eq_icon = tk.Label(aud_top, text="[ ılı.lıllılı.ıllı ]", font=("Segoe UI", 7, "bold"), fg="#00f5d4", bg="#0c0817")
+        self.lbl_eq_icon.pack(side="right")
+
+        self.lbl_active_song = tk.Label(
+            audio_box,
+            text="Overtaken (The Legendary Walk Theme)",
+            font=("Segoe UI", 9, "bold"),
+            fg="#ffffff",
+            bg="#0c0817",
+            wraplength=280,
+            justify="left"
+        )
+        self.lbl_active_song.pack(anchor="w", pady=(4, 6))
+
+        aud_ctrls = tk.Frame(audio_box, bg="#0c0817")
+        aud_ctrls.pack(fill="x")
+
+        btn_play_audio = tk.Button(
+            aud_ctrls,
+            text="▶️ Play Track",
+            font=("Segoe UI", 7, "bold"),
+            bg="#2a9d8f",
+            fg="#ffffff",
+            relief="flat",
+            cursor="hand2",
+            padx=8,
+            pady=2,
+            command=self.play_current_active_audio
+        )
+        btn_play_audio.pack(side="left", padx=(0, 4))
+        add_hover(btn_play_audio, "#2a9d8f", "#34b8a7")
+
+        btn_stop_audio = tk.Button(
+            aud_ctrls,
+            text="⏹️ Stop Sound",
+            font=("Segoe UI", 7),
+            bg="#3b3754",
+            fg="#ffffff",
+            relief="flat",
+            cursor="hand2",
+            padx=8,
+            pady=2,
+            command=anime_auto_engine.stop_audio
+        )
+        btn_stop_audio.pack(side="left")
+        add_hover(btn_stop_audio, "#3b3754", "#4a456a")
+
+        # Quick Theme Filter Row inside Info Card
+        tk.Label(info_card, text="Quick Anime Switcher:", font=("Segoe UI", 8, "bold"), fg="#b8b5cb", bg="#16122a").pack(anchor="w", pady=(10, 2))
+        self.dash_filter_combo = ttk.Combobox(info_card, state="readonly", font=("Segoe UI", 8))
+        self.dash_filter_options = [("🌐 All Anime (Balanced Shuffle)", "all")]
+        for k, v in anime_auto_engine.ANIME_CATALOG.items():
+            self.dash_filter_options.append((f"{v['title']} ({v['char']})", k))
+        self.dash_filter_combo['values'] = [opt[0] for opt in self.dash_filter_options]
+        cur_filter = self.settings.get("anime_filter", "all")
+        for i, opt in enumerate(self.dash_filter_options):
+            if opt[1] == cur_filter:
+                self.dash_filter_combo.current(i)
+                break
+        if not self.dash_filter_combo.get():
+            self.dash_filter_combo.current(0)
+        self.dash_filter_combo.bind("<<ComboboxSelected>>", self.on_dash_filter_changed)
+        self.dash_filter_combo.pack(fill="x")
 
         # Countdown & Progress Section
         timer_box = tk.Frame(tab, bg="#16122a", padx=14, pady=10, highlightbackground="#3d2c60", highlightthickness=1)
@@ -332,10 +559,11 @@ class AnimeStudioApp:
             relief="flat",
             cursor="hand2",
             padx=12,
-            pady=6,
+            pady=7,
             command=self.trigger_change_now
         )
         btn_next.pack(side="left", expand=True, fill="x", padx=2)
+        add_hover(btn_next, "#ff0055", "#e0004c")
 
         self.btn_pause = tk.Button(
             ctrl_row,
@@ -346,7 +574,7 @@ class AnimeStudioApp:
             relief="flat",
             cursor="hand2",
             padx=12,
-            pady=6,
+            pady=7,
             command=self.toggle_pause
         )
         self.btn_pause.pack(side="left", expand=True, fill="x", padx=2)
@@ -360,14 +588,30 @@ class AnimeStudioApp:
             relief="flat",
             cursor="hand2",
             padx=12,
-            pady=6,
+            pady=7,
             command=self.toggle_mini_hud
         )
         self.btn_hud_toggle.pack(side="left", expand=True, fill="x", padx=2)
+        add_hover(self.btn_hud_toggle, "#7209b7", "#8415d1")
+
+        btn_random = tk.Button(
+            ctrl_row,
+            text="🎲 RANDOM 4K",
+            font=("Segoe UI", 9, "bold"),
+            bg="#3a0ca3",
+            fg="#ffffff",
+            relief="flat",
+            cursor="hand2",
+            padx=12,
+            pady=7,
+            command=self.trigger_random_wallpaper
+        )
+        btn_random.pack(side="left", expand=True, fill="x", padx=2)
+        add_hover(btn_random, "#3a0ca3", "#4c16cb")
 
         btn_add_custom_dash = tk.Button(
             tab,
-            text="🎨 + ADD / IMPORT CUSTOM WALLPAPER (DRAG & DROP / BROWSE)",
+            text="🎨 + ADD / IMPORT CUSTOM WALLPAPERS (DRAG & DROP READY)",
             font=("Segoe UI", 9, "bold"),
             bg="#00b4d8",
             fg="#0c0817",
@@ -375,12 +619,39 @@ class AnimeStudioApp:
             activeforeground="#0c0817",
             relief="flat",
             cursor="hand2",
-            pady=7,
+            pady=8,
             command=lambda: self.show_tab("custom")
         )
         btn_add_custom_dash.pack(fill="x", pady=(8, 0))
+        add_hover(btn_add_custom_dash, "#00b4d8", "#00f5d4")
 
-    # ========================== TAB: CUSTOM WALLPAPERS ==========================
+    def on_dash_filter_changed(self, event=None):
+        idx = self.dash_filter_combo.current()
+        if 0 <= idx < len(self.dash_filter_options):
+            cat_id = self.dash_filter_options[idx][1]
+            anime_settings.update_setting("anime_filter", cat_id)
+            self.settings["anime_filter"] = cat_id
+            self.trigger_change_now()
+
+    def open_active_file(self):
+        if self.active_wallpaper_path and os.path.exists(self.active_wallpaper_path):
+            try:
+                os.startfile(self.active_wallpaper_path)
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not open file: {e}")
+
+    def trigger_random_wallpaper(self):
+        cur_settings = anime_settings.load_settings()
+        cur_settings["anime_filter"] = "all"
+        self.trigger_change_now()
+
+    def play_current_active_audio(self):
+        if self.active_song_title and self.active_song_title != "None":
+            track_p = anime_auto_engine.resolve_audio_path(self.active_song_title)
+            if track_p:
+                anime_auto_engine.play_audio(track_p)
+
+    # ========================== TAB 2: CUSTOM WALLPAPERS ==========================
     def build_custom_tab(self):
         tab = tk.Frame(self.content_area, bg="#0c0a17")
         self.tabs["custom"] = tab
@@ -390,46 +661,63 @@ class AnimeStudioApp:
 
         tk.Label(header_row, text="🎨 CUSTOM ANIME WALLPAPER STUDIO", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(side="left")
 
-        dnd_badge = "✨ Drag & Drop Active" if HAS_WINDND else "📁 File Picker Ready"
+        dnd_badge = "✨ Drag & Drop Ready" if HAS_WINDND else "📁 File Picker Ready"
         tk.Label(header_row, text=dnd_badge, font=("Segoe UI", 8, "bold"), fg="#00f5d4", bg="#16122a", padx=8, pady=2).pack(side="right")
 
-        tk.Label(tab, text="Drag & drop any anime image, GIF, video, or folder into this window, or click the quick import buttons below.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 8))
+        tk.Label(tab, text="Drag & drop anime images, GIFs, videos, or folders directly into this window, or use the quick buttons below.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 8))
 
         # --- DROP & IMPORT HERO CARD ---
-        drop_card = tk.Frame(tab, bg="#16122a", padx=14, pady=10, highlightbackground="#00b4d8", highlightthickness=1)
-        drop_card.pack(fill="x", pady=(0, 8))
+        self.drop_card = tk.Frame(tab, bg="#16122a", padx=14, pady=10, highlightbackground="#00b4d8", highlightthickness=1)
+        self.drop_card.pack(fill="x", pady=(0, 8))
 
-        # Visual Drop Box Area
-        drop_box = tk.Frame(drop_card, bg="#0c0817", padx=12, pady=10, highlightbackground="#3d2c60", highlightthickness=1, cursor="hand2")
-        drop_box.pack(fill="x", pady=(0, 6))
-        drop_box.bind("<Button-1>", lambda e: self.import_custom_images())
+        # Visual Drop Box Area with Interactive Hover Effect
+        self.drop_box = tk.Frame(self.drop_card, bg="#0d091a", padx=12, pady=12, highlightbackground="#3d2c60", highlightthickness=1, cursor="hand2")
+        self.drop_box.pack(fill="x", pady=(0, 6))
+        self.drop_box.bind("<Button-1>", lambda e: self.import_custom_images())
 
-        lbl_drop_icon = tk.Label(drop_box, text="📂 DRAG & DROP WALLPAPERS HERE", font=("Segoe UI", 10, "bold"), fg="#00f5d4", bg="#0c0817", cursor="hand2")
+        lbl_drop_icon = tk.Label(self.drop_box, text="📂 DRAG & DROP ANIME WALLPAPERS & VIDEOS HERE", font=("Segoe UI", 10, "bold"), fg="#00f5d4", bg="#0d091a", cursor="hand2")
         lbl_drop_icon.pack()
         lbl_drop_icon.bind("<Button-1>", lambda e: self.import_custom_images())
 
-        lbl_drop_hint = tk.Label(drop_box, text="Supports PNG, JPG, JPEG, WEBP, GIF, BMP, MP4, WEBM • Click to browse files", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0817", cursor="hand2")
+        lbl_drop_hint = tk.Label(self.drop_box, text="Supports PNG, JPG, JPEG, WEBP, GIF, BMP, MP4, WEBM • Click anywhere in this box to browse files", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0d091a", cursor="hand2")
         lbl_drop_hint.pack(pady=(2, 0))
         lbl_drop_hint.bind("<Button-1>", lambda e: self.import_custom_images())
 
+        def on_drop_enter(e):
+            self.drop_box.config(bg="#1a1435", highlightbackground="#00f5d4")
+            lbl_drop_icon.config(bg="#1a1435", fg="#ffe600")
+            lbl_drop_hint.config(bg="#1a1435", fg="#ffffff")
+
+        def on_drop_leave(e):
+            self.drop_box.config(bg="#0d091a", highlightbackground="#3d2c60")
+            lbl_drop_icon.config(bg="#0d091a", fg="#00f5d4")
+            lbl_drop_hint.config(bg="#0d091a", fg="#b8b5cb")
+
+        self.drop_box.bind("<Enter>", on_drop_enter)
+        self.drop_box.bind("<Leave>", on_drop_leave)
+
         # Action Buttons Row
-        act_row = tk.Frame(drop_card, bg="#16122a")
+        act_row = tk.Frame(self.drop_card, bg="#16122a")
         act_row.pack(fill="x", pady=2)
 
         btn_add_img = tk.Button(act_row, text="🖼️ + Add Images / GIFs", font=("Segoe UI", 8, "bold"), bg="#7209b7", fg="#ffffff", relief="flat", cursor="hand2", padx=10, pady=4, command=self.import_custom_images)
         btn_add_img.pack(side="left", padx=2)
+        add_hover(btn_add_img, "#7209b7", "#8415d1")
 
         btn_add_folder = tk.Button(act_row, text="📁 + Add Entire Folder", font=("Segoe UI", 8, "bold"), bg="#3a0ca3", fg="#ffffff", relief="flat", cursor="hand2", padx=10, pady=4, command=self.import_custom_folder)
         btn_add_folder.pack(side="left", padx=2)
+        add_hover(btn_add_folder, "#3a0ca3", "#4c16cb")
 
         btn_add_vid = tk.Button(act_row, text="🎬 + Add Video Loop (4K)", font=("Segoe UI", 8, "bold"), bg="#ff0055", fg="#ffffff", relief="flat", cursor="hand2", padx=10, pady=4, command=self.import_custom_video)
         btn_add_vid.pack(side="left", padx=2)
+        add_hover(btn_add_vid, "#ff0055", "#e0004c")
 
         btn_open_exp = tk.Button(act_row, text="📂 Open Folder in Explorer", font=("Segoe UI", 8), bg="#221e3b", fg="#00f5d4", relief="flat", cursor="hand2", padx=8, pady=4, command=self.open_custom_folder_explorer)
         btn_open_exp.pack(side="right", padx=2)
+        add_hover(btn_open_exp, "#221e3b", "#2f2a52")
 
         # Options Checkboxes Row
-        opts_row = tk.Frame(drop_card, bg="#16122a")
+        opts_row = tk.Frame(self.drop_card, bg="#16122a")
         opts_row.pack(fill="x", pady=(4, 0))
 
         chk_apply = tk.Checkbutton(opts_row, text="Set as Desktop Wallpaper Immediately on Import", variable=self.apply_immediately_var, font=("Segoe UI", 8), fg="#ffffff", bg="#16122a", selectcolor="#0c0817", activebackground="#16122a", activeforeground="#ffffff")
@@ -438,17 +726,18 @@ class AnimeStudioApp:
         chk_filter = tk.Checkbutton(opts_row, text="Lock Rotation to Custom Wallpapers", variable=self.filter_to_custom_var, font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a", selectcolor="#0c0817", activebackground="#16122a", activeforeground="#ffffff")
         chk_filter.pack(side="left", padx=16)
 
-        # --- GALLERY OF INSTALLED CUSTOM WALLPAPERS ---
+        # Gallery Header Row
         gal_head_row = tk.Frame(tab, bg="#0c0a17")
         gal_head_row.pack(fill="x", pady=(4, 2))
 
         self.lbl_custom_count = tk.Label(gal_head_row, text="📁 YOUR CUSTOM WALLPAPERS (0 Installed)", font=("Segoe UI", 9, "bold"), fg="#ffe600", bg="#0c0a17")
         self.lbl_custom_count.pack(side="left")
 
-        btn_refresh_custom = tk.Button(gal_head_row, text="🔄 Refresh", font=("Segoe UI", 7), bg="#1f183d", fg="#00f5d4", relief="flat", cursor="hand2", padx=6, pady=2, command=self.refresh_custom_wallpapers_grid)
+        btn_refresh_custom = tk.Button(gal_head_row, text="🔄 Refresh", font=("Segoe UI", 7, "bold"), bg="#1f183d", fg="#00f5d4", relief="flat", cursor="hand2", padx=8, pady=2, command=self.refresh_custom_wallpapers_grid)
         btn_refresh_custom.pack(side="right")
+        add_hover(btn_refresh_custom, "#1f183d", "#2d2358")
 
-        # Scrollable Frame Container
+        # Scrollable Custom Grid
         self.custom_scroll_canvas = tk.Canvas(tab, bg="#0c0a17", highlightthickness=0)
         custom_scrollbar = ttk.Scrollbar(tab, orient="vertical", command=self.custom_scroll_canvas.yview)
         self.custom_grid_frame = tk.Frame(self.custom_scroll_canvas, bg="#0c0a17")
@@ -486,10 +775,11 @@ class AnimeStudioApp:
             empty_card.pack(fill="x", pady=16, padx=10)
 
             tk.Label(empty_card, text="🌸 No Custom Wallpapers Added Yet", font=("Segoe UI", 11, "bold"), fg="#ffffff", bg="#16122a").pack()
-            tk.Label(empty_card, text="Drag & drop any anime image, GIF, or folder here, or click '+ Add Images / GIFs' above.\nThey will immediately appear here and can be applied with 1 click!", font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a", justify="center").pack(pady=6)
+            tk.Label(empty_card, text="Drag & drop any anime image, GIF, or folder here, or click '+ Add Images / GIFs' above.\nThey will immediately appear here and can be applied to your desktop with 1 click!", font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a", justify="center").pack(pady=6)
 
             btn_quick_add = tk.Button(empty_card, text="➕ Browse & Add Anime Wallpaper Now", font=("Segoe UI", 8, "bold"), bg="#00b4d8", fg="#0c0817", relief="flat", cursor="hand2", padx=12, pady=5, command=self.import_custom_images)
             btn_quick_add.pack(pady=(4, 0))
+            add_hover(btn_quick_add, "#00b4d8", "#00f5d4")
             return
 
         cols = 3
@@ -497,26 +787,32 @@ class AnimeStudioApp:
             r = idx // cols
             c = idx % cols
 
-            card = tk.Frame(self.custom_grid_frame, bg="#16122a", padx=8, pady=8, highlightbackground="#2d224e", highlightthickness=1)
+            is_active = (self.active_wallpaper_path and os.path.abspath(wp_path) == os.path.abspath(self.active_wallpaper_path))
+            border_color = "#00f5d4" if is_active else "#2d224e"
+            border_thick = 2 if is_active else 1
+
+            card = tk.Frame(self.custom_grid_frame, bg="#16122a", padx=8, pady=8, highlightbackground=border_color, highlightthickness=border_thick)
             card.grid(row=r, column=c, padx=6, pady=6, sticky="nsew")
             self.custom_grid_frame.grid_columnconfigure(c, weight=1)
+
+            if is_active:
+                tk.Label(card, text="⭐ ACTIVE DESKTOP", font=("Segoe UI", 7, "bold"), fg="#0c0817", bg="#00f5d4", padx=4).pack(anchor="w", pady=(0, 4))
 
             lbl_thumb = tk.Label(card, bg="#0c0817", width=22, height=7, cursor="hand2")
             lbl_thumb.pack(fill="x")
 
-            try:
-                im = Image.open(wp_path)
-                im.thumbnail((160, 90), Image.Resampling.LANCZOS)
-                tk_im = ImageTk.PhotoImage(im)
+            tk_im = self.get_thumbnail(wp_path, size=(180, 100))
+            if tk_im:
                 self.custom_img_refs.append(tk_im)
                 lbl_thumb.config(image=tk_im)
-            except Exception:
+            else:
                 lbl_thumb.config(text="Anime WP", fg="#00f5d4")
 
             lbl_thumb.bind("<Button-1>", lambda e, p=wp_path: self.apply_specific_wallpaper(p))
+            lbl_thumb.bind("<Double-Button-1>", lambda e, p=wp_path: self.apply_specific_wallpaper(p))
 
             base = os.path.basename(wp_path)
-            short_name = (base[:20] + "...") if len(base) > 23 else base
+            short_name = (base[:22] + "...") if len(base) > 25 else base
             lbl_name = tk.Label(card, text=short_name, font=("Segoe UI", 8, "italic"), fg="#ffffff", bg="#16122a")
             lbl_name.pack(anchor="w", pady=(4, 2))
 
@@ -525,9 +821,11 @@ class AnimeStudioApp:
 
             btn_set = tk.Button(btn_box, text="🚀 Set Desktop", font=("Segoe UI", 7, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", padx=6, pady=2, command=lambda p=wp_path: self.apply_specific_wallpaper(p))
             btn_set.pack(side="left", expand=True, fill="x", padx=(0, 2))
+            add_hover(btn_set, "#2a9d8f", "#34b8a7")
 
             btn_del = tk.Button(btn_box, text="🗑️", font=("Segoe UI", 7), bg="#4a1525", fg="#ff4d6d", relief="flat", cursor="hand2", padx=4, pady=2, command=lambda p=wp_path: self.delete_custom_wallpaper(p))
             btn_del.pack(side="right")
+            add_hover(btn_del, "#4a1525", "#6b1e35")
 
     def delete_custom_wallpaper(self, path):
         fname = os.path.basename(path)
@@ -538,7 +836,7 @@ class AnimeStudioApp:
                 self.refresh_custom_wallpapers_grid()
                 self.load_gallery_thumbnails()
             except Exception as e:
-                messagebox.showerror("Error", f"Could not delete file:\n{e}")
+                messagebox.showerror("Error", f"Could not delete file: {e}")
 
     def open_custom_folder_explorer(self):
         dest_dir = os.path.join(BASE_DIR, "wallpapers", "collection", "12_Custom_Wallpapers")
@@ -635,10 +933,9 @@ class AnimeStudioApp:
 
         msg = f"🎉 Successfully added {len(imported_files)} custom wallpaper(s)!"
         if video_count > 0:
-            msg += f"\n🎬 Processed {video_count} video loop(s)."
+            msg += f"\n🎬 Extracted 4K frames from {video_count} video loop(s)."
         if self.apply_immediately_var.get() and imported_files:
-            msg += f"\n🚀 Desktop wallpaper set to:\n{os.path.basename(imported_files[0])}"
-
+            msg += f"\n🚀 Desktop wallpaper set to: {os.path.basename(imported_files[0])}"
         messagebox.showinfo("Wallpapers Added", msg)
 
     def import_custom_images(self):
@@ -668,35 +965,174 @@ class AnimeStudioApp:
         if files:
             self.handle_drag_drop_files(files)
 
-    # ========================== TAB 2: TIMER & SCHEDULE ==========================
+    # ========================== TAB 3: 4K WALLPAPER GALLERY (EXPANDED GRID) ==========================
+    def build_gallery_tab(self):
+        tab = tk.Frame(self.content_area, bg="#0c0a17")
+        self.tabs["gallery"] = tab
+
+        tk.Label(tab, text="🖼️ 4K UHD ANIME WALLPAPER GALLERY", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 4))
+        tk.Label(tab, text="Browse 301+ pristine 4K/5K/8K widescreen masterpieces. Click any thumbnail to apply immediately to your desktop.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 8))
+
+        # Top Control Card
+        top_card = tk.Frame(tab, bg="#16122a", padx=12, pady=10, highlightbackground="#ffe600", highlightthickness=1)
+        top_card.pack(fill="x", pady=(0, 8))
+
+        cat_row = tk.Frame(top_card, bg="#16122a")
+        cat_row.pack(fill="x")
+
+        tk.Label(cat_row, text="Select Anime Series:", font=("Segoe UI", 8, "bold"), fg="#ffe600", bg="#16122a").pack(side="left")
+
+        self.gallery_cat_options = [("🌐 All Anime Universes (301+ Masterpieces)", "all")]
+        for k, v in anime_auto_engine.ANIME_CATALOG.items():
+            count = len(anime_auto_engine.get_category_wallpapers(k))
+            self.gallery_cat_options.append((f"{v['title']} ({count} Wallpapers)", k))
+
+        self.gallery_combo = ttk.Combobox(cat_row, values=[opt[0] for opt in self.gallery_cat_options], state="readonly", width=42, font=("Segoe UI", 8))
+        cur_cat = self.settings.get("anime_filter", "all")
+        for i, opt in enumerate(self.gallery_cat_options):
+            if opt[1] == cur_cat:
+                self.gallery_combo.current(i)
+                break
+        if not self.gallery_combo.get():
+            self.gallery_combo.current(0)
+        self.gallery_combo.bind("<<ComboboxSelected>>", lambda e: self.load_gallery_thumbnails())
+        self.gallery_combo.pack(side="left", padx=6)
+
+        btn_lock_cat = tk.Button(cat_row, text="Lock Rotation to Series", font=("Segoe UI", 8, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", padx=8, pady=2, command=self.save_gallery_filter)
+        btn_lock_cat.pack(side="left", padx=2)
+        add_hover(btn_lock_cat, "#2a9d8f", "#34b8a7")
+
+        btn_open_folder = tk.Button(cat_row, text="📁 Open in Explorer", font=("Segoe UI", 8), bg="#221e3b", fg="#00f5d4", relief="flat", cursor="hand2", padx=8, pady=2, command=lambda: os.startfile(os.path.join(BASE_DIR, "wallpapers", "collection")))
+        btn_open_folder.pack(side="right")
+        add_hover(btn_open_folder, "#221e3b", "#2f2a52")
+
+        # Gallery Count & Status
+        self.lbl_gal_status = tk.Label(tab, text="Showing wallpapers...", font=("Segoe UI", 8, "bold"), fg="#00f5d4", bg="#0c0a17")
+        self.lbl_gal_status.pack(anchor="w", pady=(2, 4))
+
+        # Scrollable Gallery Grid Canvas
+        self.gal_canvas = tk.Canvas(tab, bg="#0c0a17", highlightthickness=0)
+        gal_scrollbar = ttk.Scrollbar(tab, orient="vertical", command=self.gal_canvas.yview)
+        self.gal_grid_frame = tk.Frame(self.gal_canvas, bg="#0c0a17")
+
+        self.gal_grid_frame.bind(
+            "<Configure>",
+            lambda e: self.gal_canvas.configure(scrollregion=self.gal_canvas.bbox("all"))
+        )
+        self.gal_scroll_window = self.gal_canvas.create_window((0, 0), window=self.gal_grid_frame, anchor="nw")
+        self.gal_canvas.configure(yscrollcommand=gal_scrollbar.set)
+
+        self.gal_canvas.pack(side="left", fill="both", expand=True)
+        gal_scrollbar.pack(side="right", fill="y")
+        self.gal_canvas.bind('<Configure>', lambda e: self.gal_canvas.itemconfig(self.gal_scroll_window, width=e.width))
+
+    def load_gallery_thumbnails(self):
+        if not hasattr(self, "gal_grid_frame"):
+            return
+
+        for widget in self.gal_grid_frame.winfo_children():
+            widget.destroy()
+
+        idx = self.gallery_combo.current()
+        cat_id = self.gallery_cat_options[idx][1] if (0 <= idx < len(self.gallery_cat_options)) else "all"
+
+        wps = []
+        if cat_id == "all":
+            for k in anime_auto_engine.ANIME_CATALOG.keys():
+                wps.extend(anime_auto_engine.get_category_wallpapers(k))
+        else:
+            wps = anime_auto_engine.get_category_wallpapers(cat_id)
+
+        self.lbl_gal_status.config(text=f"Showing {len(wps)} Wallpapers in '{self.gallery_cat_options[idx][0]}'")
+
+        self.gallery_img_refs = []
+        cols = 4
+        # Limit initial load to 32 to guarantee fast UI responsiveness
+        display_wps = wps[:36]
+
+        for i, wp_path in enumerate(display_wps):
+            r = i // cols
+            c = i % cols
+
+            is_active = (self.active_wallpaper_path and os.path.abspath(wp_path) == os.path.abspath(self.active_wallpaper_path))
+            border_c = "#00f5d4" if is_active else "#281e42"
+            border_th = 2 if is_active else 1
+
+            card = tk.Frame(self.gal_grid_frame, bg="#16122a", padx=6, pady=6, highlightbackground=border_c, highlightthickness=border_th)
+            card.grid(row=r, column=c, padx=5, pady=5, sticky="nsew")
+            self.gal_grid_frame.grid_columnconfigure(c, weight=1)
+
+            lbl_thumb = tk.Label(card, bg="#0c0817", width=18, height=6, cursor="hand2")
+            lbl_thumb.pack(fill="x")
+
+            tk_im = self.get_thumbnail(wp_path, size=(160, 90))
+            if tk_im:
+                self.gallery_img_refs.append(tk_im)
+                lbl_thumb.config(image=tk_im)
+            else:
+                lbl_thumb.config(text="4K Anime", fg="#00f5d4")
+
+            lbl_thumb.bind("<Button-1>", lambda e, p=wp_path: self.apply_specific_wallpaper(p))
+            lbl_thumb.bind("<Double-Button-1>", lambda e, p=wp_path: self.apply_specific_wallpaper(p))
+
+            base = os.path.basename(wp_path)
+            short_name = (base[:16] + "...") if len(base) > 19 else base
+            tk.Label(card, text=short_name, font=("Segoe UI", 7, "italic"), fg="#b8b5cb", bg="#16122a").pack(anchor="w", pady=(2, 2))
+
+            btn_apply = tk.Button(card, text="🚀 Set Desktop", font=("Segoe UI", 7, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", pady=1, command=lambda p=wp_path: self.apply_specific_wallpaper(p))
+            btn_apply.pack(fill="x")
+            add_hover(btn_apply, "#2a9d8f", "#34b8a7")
+
+    def apply_specific_wallpaper(self, path):
+        anime_auto_engine.set_wallpaper_win32(path)
+        self.active_wallpaper_path = path
+        self.refresh_current_display()
+        # Refresh borders
+        if hasattr(self, "refresh_custom_wallpapers_grid"):
+            self.refresh_custom_wallpapers_grid()
+        messagebox.showinfo("Applied", f"Wallpaper applied to desktop:\n{os.path.basename(path)}")
+
+    def save_gallery_filter(self):
+        idx = self.gallery_combo.current()
+        cat_id = self.gallery_cat_options[idx][1] if (0 <= idx < len(self.gallery_cat_options)) else "all"
+        anime_settings.update_setting("anime_filter", cat_id)
+        self.settings["anime_filter"] = cat_id
+        messagebox.showinfo("Theme Applied", f"Active Anime Theme Filter set to:\n{self.gallery_cat_options[idx][0]}")
+
+    # ========================== TAB 4: TIMER & SCHEDULE ==========================
     def build_timer_tab(self):
         tab = tk.Frame(self.content_area, bg="#0c0a17")
         self.tabs["timer"] = tab
 
-        tk.Label(tab, text="⏱️ TIMER & LONG-TERM SCHEDULER", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 6))
-        tk.Label(tab, text="Fully customizable interval from 5 seconds to 1 Year+. Persists across computer reboots.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 10))
+        tk.Label(tab, text="⏱️ TIMER & LONG-TERM SCHEDULER", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 4))
+        tk.Label(tab, text="Set wallpaper rotation intervals from 5 seconds up to 1 Year+. Persists across computer reboots.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 8))
 
         card = tk.Frame(tab, bg="#16122a", padx=16, pady=14, highlightbackground="#00f5d4", highlightthickness=1)
         card.pack(fill="x", pady=4)
 
-        # Quick Presets
+        # Quick Short Presets
         tk.Label(card, text="Quick Short Presets:", font=("Segoe UI", 8, "bold"), fg="#00f5d4", bg="#16122a").pack(anchor="w")
         row_s = tk.Frame(card, bg="#16122a")
-        row_s.pack(fill="x", pady=3)
+        row_s.pack(fill="x", pady=(3, 8))
         for lbl, v, u in [("10s", 10, "seconds"), ("30s", 30, "seconds"), ("1m", 1, "minutes"), ("5m", 5, "minutes"), ("15m", 15, "minutes"), ("30m", 30, "minutes")]:
-            tk.Button(row_s, text=lbl, font=("Segoe UI", 7), bg="#1f1a38", fg="#00f5d4", relief="flat", cursor="hand2", padx=6, pady=2,
-                      command=lambda val=v, unt=u: self.set_timer_preset(val, unt)).pack(side="left", padx=2)
+            b = tk.Button(row_s, text=lbl, font=("Segoe UI", 7, "bold"), bg="#1f1a38", fg="#00f5d4", relief="flat", cursor="hand2", padx=8, pady=3,
+                          command=lambda val=v, unt=u: self.set_timer_preset(val, unt))
+            b.pack(side="left", padx=2)
+            add_hover(b, "#1f1a38", "#2c2452")
 
-        tk.Label(card, text="Quick Long Presets (Days, Months, Year):", font=("Segoe UI", 8, "bold"), fg="#ffe600", bg="#16122a").pack(anchor="w", pady=(8, 2))
+        # Quick Long Presets
+        tk.Label(card, text="Quick Long Presets (Days, Months, Years):", font=("Segoe UI", 8, "bold"), fg="#ffe600", bg="#16122a").pack(anchor="w")
         row_l = tk.Frame(card, bg="#16122a")
-        row_l.pack(fill="x", pady=3)
+        row_l.pack(fill="x", pady=(3, 10))
         for lbl, v, u in [("1 Hour", 1, "hours"), ("6 Hours", 6, "hours"), ("1 Day", 1, "days"), ("1 Week", 1, "weeks"), ("1 Month", 1, "months"), ("1 Year", 1, "years")]:
-            tk.Button(row_l, text=lbl, font=("Segoe UI", 7), bg="#2d1b4e", fg="#ffe600", relief="flat", cursor="hand2", padx=6, pady=2,
-                      command=lambda val=v, unt=u: self.set_timer_preset(val, unt)).pack(side="left", padx=2)
+            b = tk.Button(row_l, text=lbl, font=("Segoe UI", 7, "bold"), bg="#2d1b4e", fg="#ffe600", relief="flat", cursor="hand2", padx=8, pady=3,
+                          command=lambda val=v, unt=u: self.set_timer_preset(val, unt))
+            b.pack(side="left", padx=2)
+            add_hover(b, "#2d1b4e", "#3f266d")
 
         # Custom Input
         custom_frame = tk.Frame(card, bg="#16122a")
-        custom_frame.pack(fill="x", pady=(12, 6))
+        custom_frame.pack(fill="x", pady=(4, 6))
 
         tk.Label(custom_frame, text="Exact Custom Duration:", font=("Segoe UI", 9, "bold"), fg="#ffffff", bg="#16122a").pack(side="left")
         self.timer_val_var = tk.StringVar(value=str(self.settings.get("interval_value", 30)))
@@ -711,7 +1147,7 @@ class AnimeStudioApp:
         self.timer_unit_combo.bind("<<ComboboxSelected>>", lambda e: self.update_timer_preview())
         self.timer_unit_combo.pack(side="left")
 
-        # Live Target Date
+        # Live Target Date Preview
         self.lbl_timer_target = tk.Label(card, text="📅 Next Change Scheduled: Calculating...", font=("Segoe UI", 9, "bold"), fg="#ffbe0b", bg="#16122a")
         self.lbl_timer_target.pack(anchor="w", pady=(8, 4))
 
@@ -738,18 +1174,61 @@ class AnimeStudioApp:
             fg="#ffffff",
             relief="flat",
             cursor="hand2",
-            pady=6,
+            pady=7,
             command=self.save_timer_schedule
         )
         btn_save_timer.pack(fill="x", pady=(10, 0))
+        add_hover(btn_save_timer, "#2a9d8f", "#34b8a7")
 
-    # ========================== TAB 3: AUDIO & MUSIC ==========================
+    def set_timer_preset(self, val, unit):
+        self.timer_val_var.set(str(val))
+        self.timer_unit_combo.set(unit.capitalize())
+        self.update_timer_preview()
+
+    def update_timer_preview(self):
+        try:
+            val = float(self.timer_val_var.get())
+            unit = self.timer_unit_combo.get().lower()
+            secs = anime_settings.convert_to_seconds(val, unit)
+            human_str = anime_settings.format_seconds_to_human(secs)
+
+            target_ts = time.time() + secs
+            target_str = time.strftime("%a, %b %d, %Y at %I:%M:%S %p", time.localtime(target_ts))
+            self.lbl_timer_target.config(text=f"📅 Next Change: {target_str} (Every {human_str})")
+        except:
+            self.lbl_timer_target.config(text="📅 Enter a valid number")
+
+    def save_timer_schedule(self):
+        try:
+            val = float(self.timer_val_var.get())
+            if val <= 0:
+                val = 5
+        except:
+            val = 30
+
+        unit = self.timer_unit_combo.get().lower()
+        secs = anime_settings.convert_to_seconds(val, unit)
+        now = time.time()
+
+        anime_settings.update_setting("interval_value", val)
+        anime_settings.update_setting("interval_unit", unit)
+        anime_settings.update_setting("interval_seconds", secs)
+        anime_settings.update_setting("last_change_timestamp", now)
+        anime_settings.update_setting("next_change_timestamp", now + secs)
+
+        is_startup = self.startup_var.get()
+        anime_settings.set_windows_startup(is_startup)
+
+        human_time = anime_settings.format_seconds_to_human(secs)
+        messagebox.showinfo("Schedule Applied", f"Wallpaper rotation schedule updated!\n\nInterval: Every {human_time}\nStartup Active: {is_startup}")
+
+    # ========================== TAB 5: AUDIO & MUSIC ==========================
     def build_audio_tab(self):
         tab = tk.Frame(self.content_area, bg="#0c0a17")
         self.tabs["audio"] = tab
 
-        tk.Label(tab, text="🎵 MUSIC & VOICE STUDIO", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 6))
-        tk.Label(tab, text="Choose dynamic theme songs, authentic Japanese dialogue, or import your personal MP3s.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 10))
+        tk.Label(tab, text="🎵 MUSIC & VOICE STUDIO", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 4))
+        tk.Label(tab, text="Choose viral anthems, authentic Japanese character dialogue, or import personal MP3s.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 8))
 
         card = tk.Frame(tab, bg="#16122a", padx=16, pady=12, highlightbackground="#7209b7", highlightthickness=1)
         card.pack(fill="x", pady=4)
@@ -797,11 +1276,12 @@ class AnimeStudioApp:
             fg="#ffffff",
             relief="flat",
             cursor="hand2",
-            padx=6,
-            pady=1,
+            padx=8,
+            pady=2,
             command=self.import_mp3_action
         )
         btn_import_mp3.pack(side="left")
+        add_hover(btn_import_mp3, "#2a9d8f", "#34b8a7")
 
         self.play_full_song_var = tk.BooleanVar(value=self.settings.get("play_full_song", False))
         chk_full = tk.Checkbutton(
@@ -820,124 +1300,66 @@ class AnimeStudioApp:
         test_row = tk.Frame(card, bg="#16122a")
         test_row.pack(fill="x", pady=(8, 2))
 
-        btn_play = tk.Button(test_row, text="▶️ Preview Selected Track", font=("Segoe UI", 8), bg="#3a0ca3", fg="#ffffff", relief="flat", cursor="hand2", padx=8, pady=3, command=self.preview_selected_audio)
+        btn_play = tk.Button(test_row, text="▶️ Preview Selected Track", font=("Segoe UI", 8, "bold"), bg="#3a0ca3", fg="#ffffff", relief="flat", cursor="hand2", padx=10, pady=3, command=self.preview_selected_audio)
         btn_play.pack(side="left", padx=(0, 4))
+        add_hover(btn_play, "#3a0ca3", "#4c16cb")
 
-        btn_stop = tk.Button(test_row, text="⏹️ Stop Preview", font=("Segoe UI", 8), bg="#4a4e69", fg="#ffffff", relief="flat", cursor="hand2", padx=8, pady=3, command=anime_auto_engine.stop_audio)
+        btn_stop = tk.Button(test_row, text="⏹️ Stop Preview", font=("Segoe UI", 8), bg="#4a4e69", fg="#ffffff", relief="flat", cursor="hand2", padx=10, pady=3, command=anime_auto_engine.stop_audio)
         btn_stop.pack(side="left")
+        add_hover(btn_stop, "#4a4e69", "#5c6082")
 
-        btn_save_audio = tk.Button(card, text="💾 SAVE & APPLY AUDIO SETTINGS", font=("Segoe UI", 9, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", pady=6, command=self.save_audio_settings)
+        btn_save_audio = tk.Button(card, text="💾 SAVE & APPLY AUDIO SETTINGS", font=("Segoe UI", 9, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", pady=7, command=self.save_audio_settings)
         btn_save_audio.pack(fill="x", pady=(10, 0))
+        add_hover(btn_save_audio, "#2a9d8f", "#34b8a7")
 
-    # ========================== TAB 4: WALLPAPERS & GALLERY ==========================
-    def build_gallery_tab(self):
-        tab = tk.Frame(self.content_area, bg="#0c0a17")
-        self.tabs["gallery"] = tab
+    def import_mp3_action(self):
+        file_path = filedialog.askopenfilename(title="Select Custom Audio File", filetypes=[("Audio Files", "*.mp3 *.wav *.ogg *.m4a")])
+        if file_path:
+            dest_dir = os.path.join(BASE_DIR, "audio", "viral_songs")
+            os.makedirs(dest_dir, exist_ok=True)
+            fname = os.path.basename(file_path)
+            dest_path = os.path.join(dest_dir, fname)
+            try:
+                shutil.copy2(file_path, dest_path)
+                messagebox.showinfo("Imported", f"Added '{fname}' to Anime Audio Library!")
+                self.tracks_dict = anime_auto_engine.get_all_available_tracks()
+                self.track_keys = list(self.tracks_dict.keys())
+                self.audio_combo['values'] = [self.tracks_dict[k] for k in self.track_keys]
+                for i, k in enumerate(self.track_keys):
+                    if k == fname:
+                        self.audio_combo.current(i)
+                        self.audio_mode_var.set("specific_song")
+                        break
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to copy song: {e}")
 
-        tk.Label(tab, text="🖼️ 4K UHD ANIME WALLPAPER GALLERY", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 6))
-        tk.Label(tab, text="301+ Pristine 4K/5K/8K Widescreen Masterpieces. No cheap art, no phone vertical photos.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 10))
+    def preview_selected_audio(self):
+        idx = self.audio_combo.current()
+        if 0 <= idx < len(self.track_keys):
+            track_key = self.track_keys[idx]
+            p = anime_auto_engine.resolve_audio_path(track_key)
+            if p:
+                anime_auto_engine.play_audio(p)
 
-        top_card = tk.Frame(tab, bg="#16122a", padx=14, pady=10, highlightbackground="#ffe600", highlightthickness=1)
-        top_card.pack(fill="x", pady=4)
+    def save_audio_settings(self):
+        idx = self.audio_combo.current()
+        track_key = self.track_keys[idx] if (0 <= idx < len(self.track_keys)) else "one_piece_overtaken.mp3"
+        mode = self.audio_mode_var.get()
 
-        cat_row = tk.Frame(top_card, bg="#16122a")
-        cat_row.pack(fill="x")
+        anime_settings.update_setting("song_mode", mode)
+        anime_settings.update_setting("specific_song", track_key)
+        anime_settings.update_setting("play_full_song", self.play_full_song_var.get())
+        anime_settings.update_setting("sound_enabled", (mode != "mute"))
 
-        tk.Label(cat_row, text="Anime Filter:", font=("Segoe UI", 8, "bold"), fg="#ffe600", bg="#16122a").pack(side="left")
+        messagebox.showinfo("Audio Saved", f"Audio Mode updated to: {mode}")
 
-        self.gallery_cat_options = [("🌐 All Anime (Balanced Shuffle Rotation)", "all")]
-        for k, v in anime_auto_engine.ANIME_CATALOG.items():
-            self.gallery_cat_options.append((f"{v['title']} ({v['char']})", k))
-
-        self.gallery_combo = ttk.Combobox(cat_row, values=[opt[0] for opt in self.gallery_cat_options], state="readonly", width=42, font=("Segoe UI", 8))
-        cur_cat = self.settings.get("anime_filter", "all")
-        for i, opt in enumerate(self.gallery_cat_options):
-            if opt[1] == cur_cat:
-                self.gallery_combo.current(i)
-                break
-        if not self.gallery_combo.get():
-            self.gallery_combo.current(0)
-        self.gallery_combo.bind("<<ComboboxSelected>>", lambda e: self.load_gallery_thumbnails())
-        self.gallery_combo.pack(side="left", padx=6)
-
-        btn_save_filter = tk.Button(cat_row, text="Apply Filter", font=("Segoe UI", 8, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", padx=6, pady=2, command=self.save_gallery_filter)
-        btn_save_filter.pack(side="left", padx=2)
-
-        btn_import_wp = tk.Button(cat_row, text="+ Add Wallpapers", font=("Segoe UI", 8, "bold"), bg="#7209b7", fg="#ffffff", relief="flat", cursor="hand2", padx=6, pady=2, command=self.import_wallpapers_action)
-        btn_import_wp.pack(side="left", padx=2)
-
-        btn_import_vid = tk.Button(cat_row, text="🎬 + Video (4K Extract)", font=("Segoe UI", 8, "bold"), bg="#ff0055", fg="#ffffff", relief="flat", cursor="hand2", padx=6, pady=2, command=self.import_video_action)
-        btn_import_vid.pack(side="left", padx=2)
-
-        btn_pixabay = tk.Button(cat_row, text="🌐 Pixabay DL", font=("Segoe UI", 8, "bold"), bg="#4361ee", fg="#ffffff", relief="flat", cursor="hand2", padx=6, pady=2, command=self.open_pixabay_dialog)
-        btn_pixabay.pack(side="left", padx=2)
-
-        self.gallery_display = tk.Frame(tab, bg="#16122a", padx=10, pady=10)
-        self.gallery_display.pack(fill="both", expand=True, pady=8)
-
-        self.gallery_thumbs_labels = []
-        for i in range(4):
-            lbl = tk.Label(self.gallery_display, bg="#0c0817", width=22, height=8, cursor="hand2")
-            lbl.grid(row=0, column=i, padx=5, pady=5, sticky="nsew")
-            self.gallery_display.grid_columnconfigure(i, weight=1)
-            self.gallery_thumbs_labels.append(lbl)
-
-        btn_open_folder = tk.Button(
-            tab,
-            text="📁 Open Wallpaper Collection Folder in Windows Explorer",
-            font=("Segoe UI", 8),
-            bg="#1f183d",
-            fg="#00f5d4",
-            relief="flat",
-            cursor="hand2",
-            pady=4,
-            command=lambda: os.startfile(os.path.join(BASE_DIR, "wallpapers", "collection"))
-        )
-        btn_open_folder.pack(fill="x")
-
-        self.load_gallery_thumbnails()
-
-    def load_gallery_thumbnails(self):
-        idx = self.gallery_combo.current()
-        cat_id = self.gallery_cat_options[idx][1] if (0 <= idx < len(self.gallery_cat_options)) else "all"
-
-        wps = []
-        if cat_id == "all":
-            for k in anime_auto_engine.ANIME_CATALOG.keys():
-                wps.extend(anime_auto_engine.get_category_wallpapers(k))
-        else:
-            wps = anime_auto_engine.get_category_wallpapers(cat_id)
-
-        self.gallery_img_refs = []
-        self.current_gallery_wps = wps
-        for i, lbl in enumerate(self.gallery_thumbs_labels):
-            if i < len(wps):
-                wp_item = wps[i]
-                try:
-                    im = Image.open(wp_item)
-                    im.thumbnail((160, 90), Image.Resampling.LANCZOS)
-                    tk_im = ImageTk.PhotoImage(im)
-                    self.gallery_img_refs.append(tk_im)
-                    lbl.config(image=tk_im, text="")
-                    lbl.bind("<Button-1>", lambda e, p=wp_item: self.apply_specific_wallpaper(p))
-                except:
-                    lbl.config(image="", text="4K Anime")
-            else:
-                lbl.config(image="", text="")
-
-    def apply_specific_wallpaper(self, path):
-        anime_auto_engine.set_wallpaper_win32(path)
-        self.active_wallpaper_path = path
-        self.refresh_current_display()
-        messagebox.showinfo("Applied", f"Wallpaper applied to desktop:\n{os.path.basename(path)}")
-
-    # ========================== TAB 5: ANIME PORTALS ==========================
+    # ========================== TAB 6: ANIME PORTALS ==========================
     def build_portals_tab(self):
         tab = tk.Frame(self.content_area, bg="#0c0a17")
         self.tabs["portals"] = tab
 
-        tk.Label(tab, text="🌐 ANIME STREAMING & WEB PORTALS", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 6))
-        tk.Label(tab, text="1-Click fast access to official anime, manga readers, downloads, and lofi radio.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 10))
+        tk.Label(tab, text="🌐 ANIME STREAMING & WEB PORTALS", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 4))
+        tk.Label(tab, text="1-Click fast access to official anime, manga readers, downloads, and 24/7 lofi radio.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 8))
 
         portal_container = tk.Frame(tab, bg="#0c0a17")
         portal_container.pack(fill="both", expand=True)
@@ -952,7 +1374,7 @@ class AnimeStudioApp:
             lbl_p_name = tk.Label(p_card, text=name, font=("Segoe UI", 10, "bold"), fg=color, bg="#16122a")
             lbl_p_name.pack(anchor="w")
 
-            lbl_p_desc = tk.Label(p_card, text=desc, font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a", wraplength=260, justify="left")
+            lbl_p_desc = tk.Label(p_card, text=desc, font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a", wraplength=280, justify="left")
             lbl_p_desc.pack(anchor="w", pady=(2, 6))
 
             btn_open = tk.Button(
@@ -963,18 +1385,18 @@ class AnimeStudioApp:
                 fg="#000000" if color in ["#ffe600", "#00f5d4"] else "#ffffff",
                 relief="flat",
                 cursor="hand2",
-                padx=8,
-                pady=2,
+                padx=10,
+                pady=3,
                 command=lambda u=url: webbrowser.open(u)
             )
             btn_open.pack(anchor="w")
 
-    # ========================== TAB 6: SETTINGS & SYSTEM ==========================
+    # ========================== TAB 7: PREFERENCES & SETTINGS ==========================
     def build_settings_tab(self):
         tab = tk.Frame(self.content_area, bg="#0c0a17")
         self.tabs["settings"] = tab
 
-        tk.Label(tab, text="⚙️ APP SETTINGS & EMERGENCY CONTROLS", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 6))
+        tk.Label(tab, text="⚙️ APP PREFERENCES & SYSTEM CONTROLS", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(anchor="w", pady=(0, 4))
 
         card = tk.Frame(tab, bg="#16122a", padx=16, pady=12, highlightbackground="#3d2c60", highlightthickness=1)
         card.pack(fill="x", pady=4)
@@ -982,7 +1404,7 @@ class AnimeStudioApp:
         self.anim_toggle_var = tk.BooleanVar(value=self.settings.get("show_visual_transition", True))
         chk_trans = tk.Checkbutton(
             card,
-            text="✨ Enable 5-Second Cinematic Animated Visual Overlay on Wallpaper Change",
+            text="✨ Enable Cinematic Animated Visual Overlay on Wallpaper Change",
             variable=self.anim_toggle_var,
             font=("Segoe UI", 8, "bold"),
             fg="#ffe600",
@@ -1005,8 +1427,9 @@ class AnimeStudioApp:
         hud_box.pack(fill="x", pady=(10, 4))
 
         tk.Label(hud_box, text="🪟 Floating Desktop Mini-Widget:", font=("Segoe UI", 8, "bold"), fg="#00f5d4", bg="#16122a").pack(side="left")
-        btn_hud_action = tk.Button(hud_box, text="Toggle Mini-HUD On/Off", font=("Segoe UI", 7, "bold"), bg="#7209b7", fg="#ffffff", relief="flat", cursor="hand2", padx=6, pady=2, command=self.toggle_mini_hud)
+        btn_hud_action = tk.Button(hud_box, text="Toggle Mini-HUD On/Off", font=("Segoe UI", 7, "bold"), bg="#7209b7", fg="#ffffff", relief="flat", cursor="hand2", padx=8, pady=2, command=self.toggle_mini_hud)
         btn_hud_action.pack(side="left", padx=8)
+        add_hover(btn_hud_action, "#7209b7", "#8415d1")
 
         self.tray_close_var = tk.BooleanVar(value=self.settings.get("minimize_to_tray_on_close", False))
         chk_tray = tk.Checkbutton(
@@ -1022,15 +1445,16 @@ class AnimeStudioApp:
         )
         chk_tray.pack(anchor="w", pady=(6, 2))
 
-        btn_save_app = tk.Button(card, text="💾 SAVE APP PREFERENCES", font=("Segoe UI", 9, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", pady=6, command=self.save_app_preferences)
-        btn_save_app.pack(fill="x", pady=(12, 0))
+        btn_save_app = tk.Button(card, text="💾 SAVE APP PREFERENCES", font=("Segoe UI", 9, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", pady=7, command=self.save_app_preferences)
+        btn_save_app.pack(fill="x", pady=(10, 0))
+        add_hover(btn_save_app, "#2a9d8f", "#34b8a7")
 
         # Update & Maintenance Card
         update_card = tk.Frame(tab, bg="#16122a", padx=16, pady=12, highlightbackground="#00b4d8", highlightthickness=1)
         update_card.pack(fill="x", pady=(10, 0))
 
         tk.Label(update_card, text="🔄 SMART 1-CLICK UPDATER", font=("Segoe UI", 9, "bold"), fg="#00f5d4", bg="#16122a").pack(anchor="w")
-        tk.Label(update_card, text="Updates application scripts and features in 2 seconds. Never re-downloads 4K wallpapers or overwrites your custom files.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a").pack(anchor="w", pady=(2, 6))
+        tk.Label(update_card, text="Updates application scripts and features in ~3 seconds. Preserves all 301+ 4K wallpapers and custom user files.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a").pack(anchor="w", pady=(2, 6))
 
         btn_run_update = tk.Button(
             update_card,
@@ -1042,21 +1466,23 @@ class AnimeStudioApp:
             activeforeground="#0c0817",
             relief="flat",
             cursor="hand2",
-            pady=6,
+            pady=7,
             command=self.trigger_inapp_update
         )
         btn_run_update.pack(fill="x")
+        add_hover(btn_run_update, "#00b4d8", "#00f5d4")
 
+        # Emergency Kill Switch Card
         danger_card = tk.Frame(tab, bg="#2a0812", padx=16, pady=12, highlightbackground="#e63946", highlightthickness=1)
-        danger_card.pack(fill="x", pady=(14, 0))
+        danger_card.pack(fill="x", pady=(12, 0))
 
         tk.Label(danger_card, text="🛑 EMERGENCY KILL SWITCH", font=("Segoe UI", 9, "bold"), fg="#ff5964", bg="#2a0812").pack(anchor="w")
-        tk.Label(danger_card, text="Instantly stop all wallpaper auto-changing, mute all audio, and terminate the app.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#2a0812").pack(anchor="w", pady=(1, 6))
+        tk.Label(danger_card, text="Instantly stop all wallpaper auto-changing, mute all audio, and terminate the application.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#2a0812").pack(anchor="w", pady=(1, 6))
 
         btn_kill = tk.Button(
             danger_card,
             text="🛑 FORCE STOP EVERYTHING & EXIT APP",
-            font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", 9, "bold"),
             bg="#e63946",
             fg="#ffffff",
             relief="flat",
@@ -1065,6 +1491,34 @@ class AnimeStudioApp:
             command=self.kill_and_exit
         )
         btn_kill.pack(fill="x")
+        add_hover(btn_kill, "#e63946", "#c92a37")
+
+    def save_app_preferences(self):
+        anime_settings.update_setting("show_visual_transition", self.anim_toggle_var.get())
+        anime_settings.update_setting("transition_duration", self.trans_dur_var.get())
+        anime_settings.update_setting("minimize_to_tray_on_close", self.tray_close_var.get())
+        messagebox.showinfo("Saved", "App preferences updated successfully!")
+
+    def trigger_inapp_update(self):
+        update_script = os.path.join(BASE_DIR, "update.ps1")
+        if not os.path.exists(update_script):
+            messagebox.showerror("Update", "update.ps1 not found in application directory.")
+            return
+
+        res = messagebox.askyesno(
+            "Update Anime Studio Pro",
+            "Do you want to update Anime Studio Pro now?\n\n"
+            "• Updates scripts & installs latest features\n• Preserves all 301+ 4K wallpapers\n• Takes ~3-5 seconds",
+            "• Takes ~3-5 seconds"
+        )
+        if res:
+            try:
+                subprocess.Popen(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", update_script],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE
+                )
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to start updater:\n{e}")
 
     # ========================== ENGINE & TIMER LOOP ==========================
     def update_timer_loop(self):
@@ -1123,7 +1577,7 @@ class AnimeStudioApp:
     def refresh_current_display(self):
         if self.active_wallpaper_path and "12_Custom_Wallpapers" in self.active_wallpaper_path:
             self.lbl_active_anime.config(text="Custom Anime Collection")
-            self.lbl_active_char.config(text="Personal Wallpaper")
+            self.lbl_active_char.config(text="Personal Anime Wallpaper")
         elif self.active_meta:
             self.lbl_active_anime.config(text=self.active_meta.get("title", "Anime Masterpiece"))
             self.lbl_active_char.config(text=self.active_meta.get("char", "Featured Hero"))
@@ -1135,8 +1589,8 @@ class AnimeStudioApp:
             try:
                 im = Image.open(self.active_wallpaper_path)
                 w, h = im.size
-                self.lbl_active_res.config(text=f"{w}x{h} UHD")
-                im.thumbnail((260, 146), Image.Resampling.LANCZOS)
+                self.lbl_active_res.config(text=f"{w}x{h} UHD 4K")
+                im.thumbnail((300, 168), Image.Resampling.LANCZOS)
                 self.active_preview_img = ImageTk.PhotoImage(im)
                 self.lbl_preview_canvas.config(image=self.active_preview_img, text="")
             except:
@@ -1155,209 +1609,6 @@ class AnimeStudioApp:
             self.lbl_dash_timer.config(text="🔴 Auto-Change is currently PAUSED", fg="#ff5964")
             anime_settings.update_setting("auto_mode_enabled", False)
             anime_auto_engine.stop_audio()
-
-    # ========================== TIMER ACTIONS ==========================
-    def set_timer_preset(self, val, unit):
-        self.timer_val_var.set(str(val))
-        self.timer_unit_combo.set(unit.capitalize())
-        self.update_timer_preview()
-
-    def update_timer_preview(self):
-        try:
-            val = float(self.timer_val_var.get())
-            unit = self.timer_unit_combo.get().lower()
-            secs = anime_settings.convert_to_seconds(val, unit)
-            human_str = anime_settings.format_seconds_to_human(secs)
-
-            target_ts = time.time() + secs
-            target_str = time.strftime("%a, %b %d, %Y at %I:%M:%S %p", time.localtime(target_ts))
-            self.lbl_timer_target.config(text=f"📅 Next Change: {target_str} (Every {human_str})")
-        except:
-            self.lbl_timer_target.config(text="📅 Enter a valid number")
-
-    def save_timer_schedule(self):
-        try:
-            val = float(self.timer_val_var.get())
-            if val <= 0:
-                val = 5
-        except:
-            val = 30
-
-        unit = self.timer_unit_combo.get().lower()
-        secs = anime_settings.convert_to_seconds(val, unit)
-        now = time.time()
-
-        anime_settings.update_setting("interval_value", val)
-        anime_settings.update_setting("interval_unit", unit)
-        anime_settings.update_setting("interval_seconds", secs)
-        anime_settings.update_setting("last_change_timestamp", now)
-        anime_settings.update_setting("next_change_timestamp", now + secs)
-
-        is_startup = self.startup_var.get()
-        anime_settings.set_windows_startup(is_startup)
-
-        human_time = anime_settings.format_seconds_to_human(secs)
-        messagebox.showinfo("Schedule Applied", f"Wallpaper rotation schedule updated!\n\nInterval: Every {human_time}\nStartup Active: {is_startup}")
-
-    # ========================== AUDIO ACTIONS ==========================
-    def import_mp3_action(self):
-        file_path = filedialog.askopenfilename(title="Select Custom Audio File", filetypes=[("Audio Files", "*.mp3 *.wav *.ogg *.m4a")])
-        if file_path:
-            dest_dir = os.path.join(BASE_DIR, "audio", "viral_songs")
-            os.makedirs(dest_dir, exist_ok=True)
-            fname = os.path.basename(file_path)
-            dest_path = os.path.join(dest_dir, fname)
-            try:
-                shutil.copy2(file_path, dest_path)
-                messagebox.showinfo("Imported", f"Added '{fname}' to Anime Audio Library!")
-                self.tracks_dict = anime_auto_engine.get_all_available_tracks()
-                self.track_keys = list(self.tracks_dict.keys())
-                self.audio_combo['values'] = [self.tracks_dict[k] for k in self.track_keys]
-                for i, k in enumerate(self.track_keys):
-                    if k == fname:
-                        self.audio_combo.current(i)
-                        self.audio_mode_var.set("specific_song")
-                        break
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to copy song: {e}")
-
-    def preview_selected_audio(self):
-        idx = self.audio_combo.current()
-        if 0 <= idx < len(self.track_keys):
-            track_key = self.track_keys[idx]
-            p = anime_auto_engine.resolve_audio_path(track_key)
-            if p:
-                anime_auto_engine.play_audio(p)
-
-    def save_audio_settings(self):
-        idx = self.audio_combo.current()
-        track_key = self.track_keys[idx] if (0 <= idx < len(self.track_keys)) else "one_piece_overtaken.mp3"
-        mode = self.audio_mode_var.get()
-
-        anime_settings.update_setting("song_mode", mode)
-        anime_settings.update_setting("specific_song", track_key)
-        anime_settings.update_setting("play_full_song", self.play_full_song_var.get())
-        anime_settings.update_setting("sound_enabled", (mode != "mute"))
-
-        messagebox.showinfo("Audio Saved", f"Audio Mode updated to: {mode}")
-
-    # ========================== GALLERY ACTIONS ==========================
-    def save_gallery_filter(self):
-        idx = self.gallery_combo.current()
-        cat_id = self.gallery_cat_options[idx][1] if (0 <= idx < len(self.gallery_cat_options)) else "all"
-        anime_settings.update_setting("anime_filter", cat_id)
-        messagebox.showinfo("Theme Applied", f"Active Anime Theme Filter set to:\n{self.gallery_cat_options[idx][0]}")
-
-    def import_wallpapers_action(self):
-        files = filedialog.askopenfilenames(title="Select Wallpapers to Add", filetypes=[("Images", "*.jpg *.png *.jpeg *.webp")])
-        if files:
-            dest_dir = os.path.join(BASE_DIR, "wallpapers", "collection", "12_Custom_Wallpapers")
-            os.makedirs(dest_dir, exist_ok=True)
-            c = 0
-            for f in files:
-                try:
-                    shutil.copy2(f, os.path.join(dest_dir, os.path.basename(f)))
-                    c += 1
-                except:
-                    pass
-            messagebox.showinfo("Success", f"Added {c} custom wallpapers to collection!")
-            self.load_gallery_thumbnails()
-
-    def import_video_action(self):
-        files = filedialog.askopenfilenames(
-            title="Select Anime Videos / MP4 Loops to Add",
-            filetypes=[("Video Files", "*.mp4 *.webm *.mkv *.avi")]
-        )
-        if files:
-            import video_processor
-            dest_dir = os.path.join(BASE_DIR, "videos", "transitions")
-            os.makedirs(dest_dir, exist_ok=True)
-            v_count = 0
-            f_count = 0
-            for f in files:
-                try:
-                    target_p = os.path.join(dest_dir, os.path.basename(f))
-                    shutil.copy2(f, target_p)
-                    v_count += 1
-                    frames = video_processor.extract_frames_from_video(target_p, max_frames=3)
-                    f_count += len(frames)
-                except Exception as e:
-                    print("Error importing video:", e)
-            messagebox.showinfo(
-                "Videos & Wallpapers Imported!",
-                f"Successfully added {v_count} video loop(s) for live transitions!\n\n"
-                f"Extracted {f_count} crisp 4K wallpaper frames into the gallery."
-            )
-            self.load_gallery_thumbnails()
-
-    def open_pixabay_dialog(self):
-        win = tk.Toplevel(self.root)
-        win.title("🌐 Pixabay Anime Downloader")
-        win.geometry("480x230")
-        win.configure(bg="#120e24")
-        win.attributes("-topmost", True)
-
-        tk.Label(win, text="🌐 DOWNLOAD PIXABAY ANIME LOOPS & 4K WALLPAPERS", font=("Segoe UI", 9, "bold"), fg="#00f5d4", bg="#120e24").pack(pady=(14, 4))
-        tk.Label(win, text="Paste your free Pixabay API Key (get it from pixabay.com/api/docs):", font=("Segoe UI", 8), fg="#b8b5cb", bg="#120e24").pack()
-
-        entry_key = tk.Entry(win, font=("Segoe UI", 10), width=36, bg="#1e1838", fg="#ffe600", insertbackground="#ffffff")
-        entry_key.pack(pady=8)
-
-        lbl_status = tk.Label(win, text="", font=("Segoe UI", 8), fg="#00f5d4", bg="#120e24")
-        lbl_status.pack()
-
-        def start_dl():
-            key = entry_key.get().strip()
-            if not key:
-                messagebox.showwarning("Key Required", "Please enter your Pixabay API key.")
-                return
-            lbl_status.config(text="⏳ Fetching and downloading anime videos & 4K frames...", fg="#ffe600")
-            btn_dl.config(state="disabled")
-
-            def worker():
-                import video_processor
-                dl = video_processor.download_pixabay_anime_videos(key, count=15)
-                def done():
-                    lbl_status.config(text=f"✓ Downloaded {dl} video loops & extracted 4K frames!", fg="#00f5d4")
-                    btn_dl.config(state="normal")
-                    self.load_gallery_thumbnails()
-                    messagebox.showinfo("Success", f"Downloaded {dl} anime video loops!\n4K wallpaper frames added to collection.")
-                    win.destroy()
-                win.after(0, done)
-
-            threading.Thread(target=worker, daemon=True).start()
-
-        btn_dl = tk.Button(win, text="🚀 START DOWNLOADING & EXTRACTING", font=("Segoe UI", 9, "bold"), bg="#ff0055", fg="#ffffff", relief="flat", cursor="hand2", pady=5, command=start_dl)
-        btn_dl.pack(pady=8)
-
-    # ========================== APP SETTINGS ACTIONS ==========================
-    def save_app_preferences(self):
-        anime_settings.update_setting("show_visual_transition", self.anim_toggle_var.get())
-        anime_settings.update_setting("transition_duration", self.trans_dur_var.get())
-        anime_settings.update_setting("minimize_to_tray_on_close", self.tray_close_var.get())
-        messagebox.showinfo("Saved", "App preferences updated successfully!")
-
-    def trigger_inapp_update(self):
-        update_script = os.path.join(BASE_DIR, "update.ps1")
-        if not os.path.exists(update_script):
-            messagebox.showerror("Update", "update.ps1 not found in application directory.")
-            return
-
-        res = messagebox.askyesno(
-            "Update Anime Studio Pro",
-            "Do you want to update Anime Studio Pro now?\n\n"
-            "• Updates scripts & installs new features\n"
-            "• Preserves all 301+ 4K wallpapers & personal art\n"
-            "• Takes ~3-5 seconds"
-        )
-        if res:
-            try:
-                subprocess.Popen(
-                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", update_script],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE
-                )
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to start updater:\n{e}")
 
     # ========================== FLOATING MINI-HUD ==========================
     def toggle_mini_hud(self):
@@ -1380,7 +1631,7 @@ class AnimeStudioApp:
 
         sw = self.mini_hud_window.winfo_screenwidth()
         self.mini_hud_window.geometry(f"320x95+{sw - 335}+40")
-        self.mini_hud_window.configure(bg="#0c0a17")
+        self.mini_hud_window.configure(bg="#0c0a18")
 
         frame = tk.Frame(self.mini_hud_window, bg="#16122a", padx=10, pady=8, highlightbackground="#00f5d4", highlightthickness=1)
         frame.pack(fill="both", expand=True)
@@ -1464,8 +1715,7 @@ class AnimeStudioApp:
         res = messagebox.askyesnocancel(
             "Close Anime Studio",
             "How would you like to close Anime Studio?\n\n"
-            "• YES: EXIT & STOP completely (stops audio, timers, and wallpaper changer)\n"
-            "• NO: MINIMIZE to System Tray (keep running silently in background)\n"
+            "• YES: EXIT & STOP completely\n• NO: MINIMIZE to System Tray\n• CANCEL: Stay in Anime Studio",
             "• CANCEL: Stay in Anime Studio",
             icon="question"
         )
