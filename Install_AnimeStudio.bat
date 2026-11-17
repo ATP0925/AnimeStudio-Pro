@@ -17,8 +17,8 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo [1/3] Verifying Python libraries (Pillow, psutil, pystray)...
-python -m pip install --upgrade pip pillow psutil pystray --quiet
+echo [1/3] Verifying Python libraries (Pillow, psutil, pystray, windnd)...
+python -m pip install --upgrade pip pillow psutil pystray windnd --quiet
 
 echo [2/3] Creating direct shortcuts on Device Desktop...
 python "%~dp0scripts\create_shortcuts.py" "%~dp0."

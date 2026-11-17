@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # 🌸 Anime Studio Pro — Universal Windows 1-Click Installer
 # Author: Pratik Atpadkar (ATP0925)
 # Repository: https://github.com/ATP0925/AnimeStudio-Pro
@@ -186,8 +186,8 @@ if (-not $realPython) {
 
 if ($realPython) {
     Write-Host " [✓] Active Python: $realPython" -ForegroundColor Green
-    Write-Host " -> Installing required libraries (Pillow, psutil, pystray)..." -ForegroundColor White
-    & $realPython -m pip install --upgrade pip pillow psutil pystray --quiet
+    Write-Host " -> Installing required libraries (Pillow, psutil, pystray, windnd)..." -ForegroundColor White
+    & $realPython -m pip install --upgrade pip pillow psutil pystray windnd --quiet
 } else {
     Write-Host " [!] Please install Python 3.10+ from https://www.python.org/downloads/ and check 'Add Python to PATH'" -ForegroundColor Red
 }

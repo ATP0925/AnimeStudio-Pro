@@ -11,6 +11,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 
+try:
+    import windnd
+    HAS_WINDND = True
+except Exception:
+    HAS_WINDND = False
+
 # Base Directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
@@ -106,8 +112,20 @@ class AnimeStudioApp:
         self.show_mini_hud = False
         self.tray_icon = None
 
+        self.apply_immediately_var = tk.BooleanVar(value=True)
+        self.filter_to_custom_var = tk.BooleanVar(value=True)
+        self.custom_wallpapers_list = []
+        self.custom_img_refs = []
+
         self.setup_ui()
         self.setup_system_tray()
+
+        # Setup global Drag & Drop hook
+        if HAS_WINDND:
+            try:
+                windnd.hook_dropfiles(self.root, func=self.handle_drag_drop_files, force_unicode=True)
+            except Exception as e:
+                print("Drag and drop hook warning:", e)
         self.show_tab("dashboard")
 
         # Window close handler (Prompts or respects preferences)
@@ -156,6 +174,7 @@ class AnimeStudioApp:
         self.nav_buttons = {}
         navs = [
             ("dashboard", "🏠 Dashboard"),
+            ("custom", "🎨 Custom Wallpapers"),
             ("timer", "⏱️ Timer & Schedule"),
             ("audio", "🎵 Music & Voice"),
             ("gallery", "🖼️ Wallpapers (4K)"),
@@ -210,6 +229,7 @@ class AnimeStudioApp:
 
         self.tabs = {}
         self.build_dashboard_tab()
+        self.build_custom_tab()
         self.build_timer_tab()
         self.build_audio_tab()
         self.build_gallery_tab()
@@ -227,6 +247,8 @@ class AnimeStudioApp:
 
         if tab_id in self.tabs:
             self.tabs[tab_id].pack(fill="both", expand=True)
+            if tab_id == "custom":
+                self.refresh_custom_wallpapers_grid()
 
     # ========================== TAB 1: DASHBOARD ==========================
     def build_dashboard_tab(self):
@@ -342,6 +364,309 @@ class AnimeStudioApp:
             command=self.toggle_mini_hud
         )
         self.btn_hud_toggle.pack(side="left", expand=True, fill="x", padx=2)
+
+        btn_add_custom_dash = tk.Button(
+            tab,
+            text="🎨 + ADD / IMPORT CUSTOM WALLPAPER (DRAG & DROP / BROWSE)",
+            font=("Segoe UI", 9, "bold"),
+            bg="#00b4d8",
+            fg="#0c0817",
+            activebackground="#00f5d4",
+            activeforeground="#0c0817",
+            relief="flat",
+            cursor="hand2",
+            pady=7,
+            command=lambda: self.show_tab("custom")
+        )
+        btn_add_custom_dash.pack(fill="x", pady=(8, 0))
+
+    # ========================== TAB: CUSTOM WALLPAPERS ==========================
+    def build_custom_tab(self):
+        tab = tk.Frame(self.content_area, bg="#0c0a17")
+        self.tabs["custom"] = tab
+
+        header_row = tk.Frame(tab, bg="#0c0a17")
+        header_row.pack(fill="x", pady=(0, 4))
+
+        tk.Label(header_row, text="🎨 CUSTOM ANIME WALLPAPER STUDIO", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a17").pack(side="left")
+
+        dnd_badge = "✨ Drag & Drop Active" if HAS_WINDND else "📁 File Picker Ready"
+        tk.Label(header_row, text=dnd_badge, font=("Segoe UI", 8, "bold"), fg="#00f5d4", bg="#16122a", padx=8, pady=2).pack(side="right")
+
+        tk.Label(tab, text="Drag & drop any anime image, GIF, video, or folder into this window, or click the quick import buttons below.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0a17").pack(anchor="w", pady=(0, 8))
+
+        # --- DROP & IMPORT HERO CARD ---
+        drop_card = tk.Frame(tab, bg="#16122a", padx=14, pady=10, highlightbackground="#00b4d8", highlightthickness=1)
+        drop_card.pack(fill="x", pady=(0, 8))
+
+        # Visual Drop Box Area
+        drop_box = tk.Frame(drop_card, bg="#0c0817", padx=12, pady=10, highlightbackground="#3d2c60", highlightthickness=1, cursor="hand2")
+        drop_box.pack(fill="x", pady=(0, 6))
+        drop_box.bind("<Button-1>", lambda e: self.import_custom_images())
+
+        lbl_drop_icon = tk.Label(drop_box, text="📂 DRAG & DROP WALLPAPERS HERE", font=("Segoe UI", 10, "bold"), fg="#00f5d4", bg="#0c0817", cursor="hand2")
+        lbl_drop_icon.pack()
+        lbl_drop_icon.bind("<Button-1>", lambda e: self.import_custom_images())
+
+        lbl_drop_hint = tk.Label(drop_box, text="Supports PNG, JPG, JPEG, WEBP, GIF, BMP, MP4, WEBM • Click to browse files", font=("Segoe UI", 8), fg="#b8b5cb", bg="#0c0817", cursor="hand2")
+        lbl_drop_hint.pack(pady=(2, 0))
+        lbl_drop_hint.bind("<Button-1>", lambda e: self.import_custom_images())
+
+        # Action Buttons Row
+        act_row = tk.Frame(drop_card, bg="#16122a")
+        act_row.pack(fill="x", pady=2)
+
+        btn_add_img = tk.Button(act_row, text="🖼️ + Add Images / GIFs", font=("Segoe UI", 8, "bold"), bg="#7209b7", fg="#ffffff", relief="flat", cursor="hand2", padx=10, pady=4, command=self.import_custom_images)
+        btn_add_img.pack(side="left", padx=2)
+
+        btn_add_folder = tk.Button(act_row, text="📁 + Add Entire Folder", font=("Segoe UI", 8, "bold"), bg="#3a0ca3", fg="#ffffff", relief="flat", cursor="hand2", padx=10, pady=4, command=self.import_custom_folder)
+        btn_add_folder.pack(side="left", padx=2)
+
+        btn_add_vid = tk.Button(act_row, text="🎬 + Add Video Loop (4K)", font=("Segoe UI", 8, "bold"), bg="#ff0055", fg="#ffffff", relief="flat", cursor="hand2", padx=10, pady=4, command=self.import_custom_video)
+        btn_add_vid.pack(side="left", padx=2)
+
+        btn_open_exp = tk.Button(act_row, text="📂 Open Folder in Explorer", font=("Segoe UI", 8), bg="#221e3b", fg="#00f5d4", relief="flat", cursor="hand2", padx=8, pady=4, command=self.open_custom_folder_explorer)
+        btn_open_exp.pack(side="right", padx=2)
+
+        # Options Checkboxes Row
+        opts_row = tk.Frame(drop_card, bg="#16122a")
+        opts_row.pack(fill="x", pady=(4, 0))
+
+        chk_apply = tk.Checkbutton(opts_row, text="Set as Desktop Wallpaper Immediately on Import", variable=self.apply_immediately_var, font=("Segoe UI", 8), fg="#ffffff", bg="#16122a", selectcolor="#0c0817", activebackground="#16122a", activeforeground="#ffffff")
+        chk_apply.pack(side="left")
+
+        chk_filter = tk.Checkbutton(opts_row, text="Lock Rotation to Custom Wallpapers", variable=self.filter_to_custom_var, font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a", selectcolor="#0c0817", activebackground="#16122a", activeforeground="#ffffff")
+        chk_filter.pack(side="left", padx=16)
+
+        # --- GALLERY OF INSTALLED CUSTOM WALLPAPERS ---
+        gal_head_row = tk.Frame(tab, bg="#0c0a17")
+        gal_head_row.pack(fill="x", pady=(4, 2))
+
+        self.lbl_custom_count = tk.Label(gal_head_row, text="📁 YOUR CUSTOM WALLPAPERS (0 Installed)", font=("Segoe UI", 9, "bold"), fg="#ffe600", bg="#0c0a17")
+        self.lbl_custom_count.pack(side="left")
+
+        btn_refresh_custom = tk.Button(gal_head_row, text="🔄 Refresh", font=("Segoe UI", 7), bg="#1f183d", fg="#00f5d4", relief="flat", cursor="hand2", padx=6, pady=2, command=self.refresh_custom_wallpapers_grid)
+        btn_refresh_custom.pack(side="right")
+
+        # Scrollable Frame Container
+        self.custom_scroll_canvas = tk.Canvas(tab, bg="#0c0a17", highlightthickness=0)
+        custom_scrollbar = ttk.Scrollbar(tab, orient="vertical", command=self.custom_scroll_canvas.yview)
+        self.custom_grid_frame = tk.Frame(self.custom_scroll_canvas, bg="#0c0a17")
+
+        self.custom_grid_frame.bind(
+            "<Configure>",
+            lambda e: self.custom_scroll_canvas.configure(scrollregion=self.custom_scroll_canvas.bbox("all"))
+        )
+
+        self.custom_scroll_window = self.custom_scroll_canvas.create_window((0, 0), window=self.custom_grid_frame, anchor="nw")
+        self.custom_scroll_canvas.configure(yscrollcommand=custom_scrollbar.set)
+
+        self.custom_scroll_canvas.pack(side="left", fill="both", expand=True)
+        custom_scrollbar.pack(side="right", fill="y")
+
+        self.custom_scroll_canvas.bind('<Configure>', lambda e: self.custom_scroll_canvas.itemconfig(self.custom_scroll_window, width=e.width))
+
+    def refresh_custom_wallpapers_grid(self):
+        if not hasattr(self, "custom_grid_frame"):
+            return
+
+        for widget in self.custom_grid_frame.winfo_children():
+            widget.destroy()
+
+        self.custom_img_refs = []
+        wps = anime_auto_engine.get_category_wallpapers("12_Custom_Wallpapers")
+        self.custom_wallpapers_list = wps
+
+        count_text = f"📁 YOUR CUSTOM WALLPAPERS ({len(wps)} Installed)"
+        if hasattr(self, "lbl_custom_count"):
+            self.lbl_custom_count.config(text=count_text)
+
+        if not wps:
+            empty_card = tk.Frame(self.custom_grid_frame, bg="#16122a", padx=24, pady=24, highlightbackground="#3d2c60", highlightthickness=1)
+            empty_card.pack(fill="x", pady=16, padx=10)
+
+            tk.Label(empty_card, text="🌸 No Custom Wallpapers Added Yet", font=("Segoe UI", 11, "bold"), fg="#ffffff", bg="#16122a").pack()
+            tk.Label(empty_card, text="Drag & drop any anime image, GIF, or folder here, or click '+ Add Images / GIFs' above.\nThey will immediately appear here and can be applied with 1 click!", font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a", justify="center").pack(pady=6)
+
+            btn_quick_add = tk.Button(empty_card, text="➕ Browse & Add Anime Wallpaper Now", font=("Segoe UI", 8, "bold"), bg="#00b4d8", fg="#0c0817", relief="flat", cursor="hand2", padx=12, pady=5, command=self.import_custom_images)
+            btn_quick_add.pack(pady=(4, 0))
+            return
+
+        cols = 3
+        for idx, wp_path in enumerate(wps):
+            r = idx // cols
+            c = idx % cols
+
+            card = tk.Frame(self.custom_grid_frame, bg="#16122a", padx=8, pady=8, highlightbackground="#2d224e", highlightthickness=1)
+            card.grid(row=r, column=c, padx=6, pady=6, sticky="nsew")
+            self.custom_grid_frame.grid_columnconfigure(c, weight=1)
+
+            lbl_thumb = tk.Label(card, bg="#0c0817", width=22, height=7, cursor="hand2")
+            lbl_thumb.pack(fill="x")
+
+            try:
+                im = Image.open(wp_path)
+                im.thumbnail((160, 90), Image.Resampling.LANCZOS)
+                tk_im = ImageTk.PhotoImage(im)
+                self.custom_img_refs.append(tk_im)
+                lbl_thumb.config(image=tk_im)
+            except Exception:
+                lbl_thumb.config(text="Anime WP", fg="#00f5d4")
+
+            lbl_thumb.bind("<Button-1>", lambda e, p=wp_path: self.apply_specific_wallpaper(p))
+
+            base = os.path.basename(wp_path)
+            short_name = (base[:20] + "...") if len(base) > 23 else base
+            lbl_name = tk.Label(card, text=short_name, font=("Segoe UI", 8, "italic"), fg="#ffffff", bg="#16122a")
+            lbl_name.pack(anchor="w", pady=(4, 2))
+
+            btn_box = tk.Frame(card, bg="#16122a")
+            btn_box.pack(fill="x", pady=(2, 0))
+
+            btn_set = tk.Button(btn_box, text="🚀 Set Desktop", font=("Segoe UI", 7, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", padx=6, pady=2, command=lambda p=wp_path: self.apply_specific_wallpaper(p))
+            btn_set.pack(side="left", expand=True, fill="x", padx=(0, 2))
+
+            btn_del = tk.Button(btn_box, text="🗑️", font=("Segoe UI", 7), bg="#4a1525", fg="#ff4d6d", relief="flat", cursor="hand2", padx=4, pady=2, command=lambda p=wp_path: self.delete_custom_wallpaper(p))
+            btn_del.pack(side="right")
+
+    def delete_custom_wallpaper(self, path):
+        fname = os.path.basename(path)
+        if messagebox.askyesno("Delete Wallpaper", f"Are you sure you want to remove '{fname}' from custom wallpapers?"):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+                self.refresh_custom_wallpapers_grid()
+                self.load_gallery_thumbnails()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not delete file:\n{e}")
+
+    def open_custom_folder_explorer(self):
+        dest_dir = os.path.join(BASE_DIR, "wallpapers", "collection", "12_Custom_Wallpapers")
+        os.makedirs(dest_dir, exist_ok=True)
+        os.startfile(dest_dir)
+
+    def handle_drag_drop_files(self, filenames):
+        if not filenames:
+            return
+
+        valid_img_exts = ('.jpg', '.png', '.jpeg', '.webp', '.bmp', '.gif')
+        valid_vid_exts = ('.mp4', '.webm', '.mkv', '.avi')
+
+        dest_dir = os.path.join(BASE_DIR, "wallpapers", "collection", "12_Custom_Wallpapers")
+        os.makedirs(dest_dir, exist_ok=True)
+
+        imported_files = []
+        video_count = 0
+
+        for item in filenames:
+            if isinstance(item, bytes):
+                try:
+                    item_path = item.decode('utf-8')
+                except Exception:
+                    item_path = item.decode('mbcs', errors='ignore')
+            else:
+                item_path = str(item)
+
+            item_path = item_path.strip().strip('"')
+            if not os.path.exists(item_path):
+                continue
+
+            if os.path.isdir(item_path):
+                for root, _, files in os.walk(item_path):
+                    for f in files:
+                        p = os.path.join(root, f)
+                        if f.lower().endswith(valid_img_exts):
+                            try:
+                                tgt = os.path.join(dest_dir, f)
+                                shutil.copy2(p, tgt)
+                                imported_files.append(tgt)
+                            except Exception:
+                                pass
+                        elif f.lower().endswith(valid_vid_exts):
+                            try:
+                                import video_processor
+                                vid_dest = os.path.join(BASE_DIR, "videos", "transitions", f)
+                                shutil.copy2(p, vid_dest)
+                                frames = video_processor.extract_frames_from_video(vid_dest, max_frames=3)
+                                for fr in frames:
+                                    tgt = os.path.join(dest_dir, os.path.basename(fr))
+                                    shutil.copy2(fr, tgt)
+                                    imported_files.append(tgt)
+                                video_count += 1
+                            except Exception:
+                                pass
+            elif os.path.isfile(item_path):
+                f = os.path.basename(item_path)
+                if item_path.lower().endswith(valid_img_exts):
+                    try:
+                        tgt = os.path.join(dest_dir, f)
+                        shutil.copy2(item_path, tgt)
+                        imported_files.append(tgt)
+                    except Exception:
+                        pass
+                elif item_path.lower().endswith(valid_vid_exts):
+                    try:
+                        import video_processor
+                        vid_dest = os.path.join(BASE_DIR, "videos", "transitions", f)
+                        shutil.copy2(item_path, vid_dest)
+                        frames = video_processor.extract_frames_from_video(vid_dest, max_frames=3)
+                        for fr in frames:
+                            tgt = os.path.join(dest_dir, os.path.basename(fr))
+                            shutil.copy2(fr, tgt)
+                            imported_files.append(tgt)
+                        video_count += 1
+                    except Exception:
+                        pass
+
+        if not imported_files and video_count == 0:
+            messagebox.showwarning("Import", "No supported image, GIF, or video files found.")
+            return
+
+        self.refresh_custom_wallpapers_grid()
+        self.load_gallery_thumbnails()
+        self.show_tab("custom")
+
+        if self.apply_immediately_var.get() and imported_files:
+            first_wp = imported_files[0]
+            self.apply_specific_wallpaper(first_wp)
+
+        if self.filter_to_custom_var.get():
+            anime_settings.update_setting("anime_filter", "12_Custom_Wallpapers")
+
+        msg = f"🎉 Successfully added {len(imported_files)} custom wallpaper(s)!"
+        if video_count > 0:
+            msg += f"\n🎬 Processed {video_count} video loop(s)."
+        if self.apply_immediately_var.get() and imported_files:
+            msg += f"\n🚀 Desktop wallpaper set to:\n{os.path.basename(imported_files[0])}"
+
+        messagebox.showinfo("Wallpapers Added", msg)
+
+    def import_custom_images(self):
+        files = filedialog.askopenfilenames(
+            title="Select Anime Wallpapers or GIFs to Add",
+            filetypes=[
+                ("Image & Animated Files", "*.png *.jpg *.jpeg *.webp *.gif *.bmp"),
+                ("All Files", "*.*")
+            ]
+        )
+        if files:
+            self.handle_drag_drop_files(files)
+
+    def import_custom_folder(self):
+        folder = filedialog.askdirectory(title="Select Folder Containing Anime Wallpapers")
+        if folder:
+            self.handle_drag_drop_files([folder])
+
+    def import_custom_video(self):
+        files = filedialog.askopenfilenames(
+            title="Select Anime Video Loops (4K Frame Extraction)",
+            filetypes=[
+                ("Video Files", "*.mp4 *.webm *.mkv *.avi"),
+                ("All Files", "*.*")
+            ]
+        )
+        if files:
+            self.handle_drag_drop_files(files)
 
     # ========================== TAB 2: TIMER & SCHEDULE ==========================
     def build_timer_tab(self):
@@ -774,7 +1099,10 @@ class AnimeStudioApp:
         self.lbl_dash_timer.config(text=f"⏳ Next 4K Wallpaper: {anime_settings.format_seconds_to_human(rem)}", fg="#ffe600")
 
     def refresh_current_display(self):
-        if self.active_meta:
+        if self.active_wallpaper_path and "12_Custom_Wallpapers" in self.active_wallpaper_path:
+            self.lbl_active_anime.config(text="Custom Anime Collection")
+            self.lbl_active_char.config(text="Personal Wallpaper")
+        elif self.active_meta:
             self.lbl_active_anime.config(text=self.active_meta.get("title", "Anime Masterpiece"))
             self.lbl_active_char.config(text=self.active_meta.get("char", "Featured Hero"))
         if self.active_song_title:

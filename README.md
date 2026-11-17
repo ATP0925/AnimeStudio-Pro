@@ -40,7 +40,14 @@ cd D:\AnimeStudio
 
 ## 🌟 Key Features
 
-### 1. 🖼️ Curated 4K/5K/8K UHD Wallpaper Gallery (301+ Masterpieces)
+### 1. 🎨 1-Click Custom Wallpaper Studio (Drag & Drop + Folders)
+* **Instant Drag & Drop**: Drag and drop any image, GIF, video, or entire folder directly into Anime Studio from Windows File Explorer.
+* **1-Click Apply**: Instantly set any imported wallpaper as your active Windows desktop background with zero delay.
+* **Format Versatility**: Supports PNG, JPG, JPEG, WEBP, BMP, animated GIFs, and video loops (`.mp4`, `.webm`, `.mkv`).
+* **Visual Gallery & Management**: Interactive thumbnail grid showing all your personal wallpapers with 1-click "Set as Desktop" and delete controls.
+* **Batch Folder Import**: Import full folders of anime wallpapers in one click with recursive directory scanning.
+
+### 2. 🖼️ Curated 4K/5K/8K UHD Wallpaper Gallery (301+ Masterpieces)
 * **Zero Low-Quality / Cheap Art**: All blurry, low-res, non-anime, or vertical phone wallpapers have been purged.
 * **11 Core Anime Categories**:
   1. **Jujutsu Kaisen** (Satoru Gojo Unlimited Void, Sukuna Malevolent Shrine)
@@ -54,10 +61,10 @@ cd D:\AnimeStudio
   9. **Studio Ghibli Masterpieces** (Spirited Away, Howl's Moving Castle 4K)
   10. **Makoto Shinkai Universe** (Your Name, Suzume, Weathering With You 4K)
   11. **Fate Series** (Saber Artoria Excalibur 4K)
-  12. **Custom Wallpapers** (Import your own pictures easily)
+  12. **Custom Wallpapers** (Instant personal studio with drag & drop)
   13. **Live Anime Stills** (Automated 4K frame extraction from video loops)
 
-### 2. ⏱️ Long-Term Scheduler (5 Seconds up to 1 Year+)
+### 3. ⏱️ Long-Term Scheduler (5 Seconds up to 1 Year+)
 * **Unlimited Customization**: Set rotation interval in Seconds, Minutes, Hours, Days, Weeks, Months, or Years!
 * **Quick Presets**:
   * *Short*: `10s` | `30s` | `1m` | `5m` | `15m` | `30m`

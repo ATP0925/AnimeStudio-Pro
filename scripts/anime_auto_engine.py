@@ -165,14 +165,33 @@ def get_category_wallpapers(category_name):
     if not os.path.exists(folder_path):
         return []
     valid = []
-    for f in os.listdir(folder_path):
-        if f.lower().endswith(('.jpg', '.png', '.jpeg', '.webp')):
-            valid.append(os.path.join(folder_path, f))
+    valid_exts = ('.jpg', '.png', '.jpeg', '.webp', '.bmp', '.gif')
+    if category_name == "12_Custom_Wallpapers":
+        for root, _, files in os.walk(folder_path):
+            for f in files:
+                if f.lower().endswith(valid_exts):
+                    valid.append(os.path.join(root, f))
+    else:
+        for f in os.listdir(folder_path):
+            if f.lower().endswith(valid_exts):
+                valid.append(os.path.join(folder_path, f))
     return valid
 
 def set_wallpaper_win32(path):
     if not path or not os.path.exists(path):
         return False
+    # If path is gif or unsupported directly by win32, extract crisp frame as png cache
+    if path.lower().endswith('.gif'):
+        try:
+            from PIL import Image
+            cache_dir = os.path.join(BASE_DIR, "wallpapers", ".cache")
+            os.makedirs(cache_dir, exist_ok=True)
+            cache_path = os.path.join(cache_dir, os.path.splitext(os.path.basename(path))[0] + "_frame.png")
+            with Image.open(path) as img:
+                img.convert("RGB").save(cache_path, "PNG")
+            path = cache_path
+        except Exception:
+            pass
     ret = ctypes.windll.user32.SystemParametersInfoW(
         SPI_SETDESKWALLPAPER,
         0,
