@@ -1025,6 +1025,28 @@ class AnimeStudioApp:
         btn_save_app = tk.Button(card, text="💾 SAVE APP PREFERENCES", font=("Segoe UI", 9, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", pady=6, command=self.save_app_preferences)
         btn_save_app.pack(fill="x", pady=(12, 0))
 
+        # Update & Maintenance Card
+        update_card = tk.Frame(tab, bg="#16122a", padx=16, pady=12, highlightbackground="#00b4d8", highlightthickness=1)
+        update_card.pack(fill="x", pady=(10, 0))
+
+        tk.Label(update_card, text="🔄 SMART 1-CLICK UPDATER", font=("Segoe UI", 9, "bold"), fg="#00f5d4", bg="#16122a").pack(anchor="w")
+        tk.Label(update_card, text="Updates application scripts and features in 2 seconds. Never re-downloads 4K wallpapers or overwrites your custom files.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a").pack(anchor="w", pady=(2, 6))
+
+        btn_run_update = tk.Button(
+            update_card,
+            text="🚀 CHECK & APPLY LATEST UPDATES NOW",
+            font=("Segoe UI", 8, "bold"),
+            bg="#00b4d8",
+            fg="#0c0817",
+            activebackground="#00f5d4",
+            activeforeground="#0c0817",
+            relief="flat",
+            cursor="hand2",
+            pady=6,
+            command=self.trigger_inapp_update
+        )
+        btn_run_update.pack(fill="x")
+
         danger_card = tk.Frame(tab, bg="#2a0812", padx=16, pady=12, highlightbackground="#e63946", highlightthickness=1)
         danger_card.pack(fill="x", pady=(14, 0))
 
@@ -1314,6 +1336,28 @@ class AnimeStudioApp:
         anime_settings.update_setting("transition_duration", self.trans_dur_var.get())
         anime_settings.update_setting("minimize_to_tray_on_close", self.tray_close_var.get())
         messagebox.showinfo("Saved", "App preferences updated successfully!")
+
+    def trigger_inapp_update(self):
+        update_script = os.path.join(BASE_DIR, "update.ps1")
+        if not os.path.exists(update_script):
+            messagebox.showerror("Update", "update.ps1 not found in application directory.")
+            return
+
+        res = messagebox.askyesno(
+            "Update Anime Studio Pro",
+            "Do you want to update Anime Studio Pro now?\n\n"
+            "• Updates scripts & installs new features\n"
+            "• Preserves all 301+ 4K wallpapers & personal art\n"
+            "• Takes ~3-5 seconds"
+        )
+        if res:
+            try:
+                subprocess.Popen(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", update_script],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE
+                )
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to start updater:\n{e}")
 
     # ========================== FLOATING MINI-HUD ==========================
     def toggle_mini_hud(self):

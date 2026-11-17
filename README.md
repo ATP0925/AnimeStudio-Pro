@@ -38,6 +38,23 @@ cd D:\AnimeStudio
 
 ---
 
+## 🔄 Fast 1-Click Update (Zero Wallpaper Re-download)
+
+If you already have Anime Studio Pro installed and want the latest features (e.g. Custom Wallpaper Studio with Drag & Drop):
+
+### 1-Line Universal PowerShell Update (Recommended)
+Open PowerShell and run:
+```powershell
+irm https://raw.githubusercontent.com/ATP0925/AnimeStudio-Pro/main/update.ps1 | iex
+```
+* **Lightning Fast (~3 seconds)**: Syncs only updated scripts and dependencies (`windnd`).
+* **100% Safe**: Never re-downloads the 301+ 4K wallpapers, touches existing audio, or overwrites your personal custom files.
+
+### Offline / Local Update
+Double-click **`Update_AnimeStudio.bat`** inside your `AnimeStudio` folder.
+
+---
+
 ## 🌟 Key Features
 
 ### 1. 🎨 1-Click Custom Wallpaper Studio (Drag & Drop + Folders)

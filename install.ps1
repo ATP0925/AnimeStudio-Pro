@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # 🌸 Anime Studio Pro — Universal Windows 1-Click Installer
 # Author: Pratik Atpadkar (ATP0925)
 # Repository: https://github.com/ATP0925/AnimeStudio-Pro
