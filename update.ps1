@@ -1,10 +1,5 @@
-﻿# ==============================================================================
-# 🌸 Anime Studio Pro — Fast 1-Click Smart Updater
-# Author: Pratik Atpadkar (ATP0925)
-# Repository: https://github.com/ATP0925/AnimeStudio-Pro
-# ==============================================================================
-
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$ErrorActionPreference = 'SilentlyContinue'
 $ProgressPreference = 'SilentlyContinue'
 
 Write-Host "======================================================================" -ForegroundColor Magenta
@@ -18,42 +13,118 @@ Write-Host ""
 # -----------------------------------------------------------------------------
 Write-Host "[1/3] Locating Anime Studio installation..." -ForegroundColor Cyan
 
-$candidates = @(
-    (Get-Location).Path,
-    "$PSScriptRoot",
-    "$env:USERPROFILE\AnimeStudio",
-    "$env:USERPROFILE\AnimeSetup"
-)
+$installDir = $null
 
-# Detect all currently mounted drives dynamically
+# Strategy A: Check Desktop Shortcuts
+$desktopDirs = @(
+    [Environment]::GetFolderPath('Desktop'),
+    [Environment]::GetFolderPath('CommonDesktopDirectory'),
+    (Join-Path $env:USERPROFILE 'Desktop')
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
 try {
-    $fsRoots = Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Root }
-    foreach ($r in $fsRoots) {
-        $candidates += (Join-Path $r "AnimeStudio" -ErrorAction SilentlyContinue)
-        $candidates += (Join-Path $r "AnimeSetup" -ErrorAction SilentlyContinue)
+    $wsh = New-Object -ComObject WScript.Shell
+    foreach ($d in $desktopDirs) {
+        $shortcuts = Get-ChildItem -Path $d -Filter '*.lnk' -ErrorAction SilentlyContinue
+        foreach ($scItem in $shortcuts) {
+            try {
+                $sc = $wsh.CreateShortcut($scItem.FullName)
+                if ($sc -and $sc.WorkingDirectory) {
+                    $chk = Join-Path $sc.WorkingDirectory "scripts\anime_studio.py"
+                    if (Test-Path $chk) {
+                        $installDir = $sc.WorkingDirectory
+                        break
+                    }
+                }
+            } catch {}
+        }
+        if ($installDir) { break }
     }
 } catch {}
 
-$installDir = $null
-foreach ($cand in $candidates) {
-    if ($cand -and (Test-Path $cand -ErrorAction SilentlyContinue)) {
-        $testScript = Join-Path $cand "scripts\anime_studio.py" -ErrorAction SilentlyContinue
-        if ($testScript -and (Test-Path $testScript -ErrorAction SilentlyContinue)) {
-            $installDir = $cand
-            break
+# Strategy B: Current working directory or script directory
+if (-not $installDir) {
+    $locs = @((Get-Location).Path, $PSScriptRoot)
+    foreach ($l in $locs) {
+        if ($l) {
+            $chk = Join-Path $l "scripts\anime_studio.py"
+            if (Test-Path $chk) {
+                $installDir = $l
+                break
+            }
+        }
+    }
+}
+
+# Strategy C: Known standard user directories
+if (-not $installDir) {
+    $commonDirs = @(
+        (Join-Path $env:USERPROFILE 'AnimeSetup'),
+        (Join-Path $env:USERPROFILE 'AnimeStudio'),
+        (Join-Path $env:USERPROFILE 'AnimeStudio-Pro'),
+        (Join-Path $env:LOCALAPPDATA 'AnimeStudio'),
+        (Join-Path $env:LOCALAPPDATA 'AnimeSetup'),
+        'C:\AnimeStudio',
+        'C:\AnimeSetup'
+    )
+    foreach ($cd in $commonDirs) {
+        if ($cd -and (Test-Path $cd)) {
+            $chk = Join-Path $cd "scripts\anime_studio.py"
+            if (Test-Path $chk) {
+                $installDir = $cd
+                break
+            }
+        }
+    }
+}
+
+# Strategy D: Active mounted drive roots
+if (-not $installDir) {
+    try {
+        $mountedRoots = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -ne $null } | ForEach-Object { $_.Root }
+        foreach ($r in $mountedRoots) {
+            foreach ($sub in @('AnimeSetup', 'AnimeStudio', 'AnimeStudio-Pro')) {
+                $target = Join-Path $r $sub
+                if (Test-Path $target) {
+                    $chk = Join-Path $target "scripts\anime_studio.py"
+                    if (Test-Path $chk) {
+                        $installDir = $target
+                        break
+                    }
+                }
+            }
+            if ($installDir) { break }
+        }
+    } catch {}
+}
+
+# Strategy E: Deep search in user profile (depth 2)
+if (-not $installDir) {
+    try {
+        $found = Get-ChildItem -Path $env:USERPROFILE -Directory -Depth 2 -Filter 'Anime*' -ErrorAction SilentlyContinue | Where-Object {
+            Test-Path (Join-Path $_.FullName "scripts\anime_studio.py")
+        } | Select-Object -First 1
+        if ($found) {
+            $installDir = $found.FullName
+        }
+    } catch {}
+}
+
+# Strategy F: Interactive prompt fallback (if not piped)
+if (-not $installDir) {
+    if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+        Write-Host " [!] Could not auto-detect Anime Studio folder." -ForegroundColor Yellow
+        $userInput = Read-Host "Please enter the path to your Anime Studio folder (e.g. C:\AnimeSetup)"
+        if ($userInput -and (Test-Path (Join-Path $userInput "scripts\anime_studio.py"))) {
+            $installDir = $userInput.Trim().TrimEnd('\')
         }
     }
 }
 
 if (-not $installDir) {
-    Write-Host " [!] Could not auto-detect AnimeStudio folder." -ForegroundColor Yellow
-    $userInput = Read-Host "Please enter the path to your AnimeStudio folder (e.g. D:\AnimeStudio)"
-    if ($userInput -and (Test-Path (Join-Path $userInput "scripts\anime_studio.py"))) {
-        $installDir = $userInput.Trim().TrimEnd('\')
-    } else {
-        Write-Host "❌ Error: Invalid AnimeStudio path. Update cancelled." -ForegroundColor Red
-        exit 1
-    }
+    Write-Host "❌ Error: Could not locate Anime Studio installation." -ForegroundColor Red
+    Write-Host "   Please run this command from your AnimeSetup folder or run Update_AnimeStudio.bat" -ForegroundColor Yellow
+    exit 1
 }
 
 Write-Host " [✓] Found Anime Studio at: $installDir" -ForegroundColor Green
@@ -64,12 +135,21 @@ Write-Host " [✓] Found Anime Studio at: $installDir" -ForegroundColor Green
 Write-Host "`n[2/3] Updating scripts to latest release (Zero Wallpaper Re-download)..." -ForegroundColor Cyan
 
 $hasGit = [bool](Get-Command git.exe -ErrorAction SilentlyContinue)
-$isGitRepo = Test-Path (Join-Path $installDir ".git")
+$isGitRepo = Test-Path (Join-Path $installDir '.git')
 
 if ($hasGit -and $isGitRepo) {
     Write-Host " -> Syncing via Git pull..." -ForegroundColor White
     try {
+        $settingsFile = Join-Path $installDir "config\settings.json"
+        $backupSettings = $null
+        if (Test-Path $settingsFile) {
+            $backupSettings = Get-Content -Path $settingsFile -Raw
+        }
+        & git -C $installDir reset --hard HEAD --quiet 2>$null
         & git -C $installDir pull origin main --quiet
+        if ($backupSettings -and (Test-Path (Split-Path $settingsFile))) {
+            [System.IO.File]::WriteAllText($settingsFile, $backupSettings, [System.Text.Encoding]::UTF8)
+        }
         Write-Host " [✓] Git repository updated cleanly." -ForegroundColor Green
     } catch {
         Write-Host " [!] Git pull warning, falling back to direct script sync..." -ForegroundColor Yellow
@@ -114,18 +194,18 @@ Write-Host "`n[3/3] Verifying Python runtime and libraries..." -ForegroundColor 
 function Find-Python {
     try {
         $p = (Get-Command python.exe -ErrorAction SilentlyContinue).Source
-        if ($p -and $p -notmatch "WindowsApps") {
+        if ($p -and $p -notmatch 'WindowsApps') {
             $chk = & $p -c "import sys; print(sys.executable)" 2>&1
             if ($LASTEXITCODE -eq 0) { return $p }
         }
     } catch {}
 
     $candidates = @(
-        "C:\Program Files\Python314\python.exe",
-        "C:\Program Files\Python313\python.exe",
-        "C:\Program Files\Python312\python.exe",
-        "C:\Program Files\Python311\python.exe",
-        "C:\Program Files\Python310\python.exe",
+        'C:\Program Files\Python314\python.exe',
+        'C:\Program Files\Python313\python.exe',
+        'C:\Program Files\Python312\python.exe',
+        'C:\Program Files\Python311\python.exe',
+        'C:\Program Files\Python310\python.exe',
         "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
         "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"
     )
@@ -171,7 +251,7 @@ Write-Host ""
 if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
     try {
         $launch = Read-Host "Do you want to launch Anime Studio Pro now? (Y/N)"
-        if ($launch -match "^[yY]") {
+        if ($launch -match '^[yY]') {
             $launcher = Join-Path $installDir "AnimeStudio.pyw"
             Start-Process "pythonw.exe" -ArgumentList "`"$launcher`""
         }
