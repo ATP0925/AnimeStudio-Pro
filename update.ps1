@@ -21,17 +21,27 @@ Write-Host "[1/3] Locating Anime Studio installation..." -ForegroundColor Cyan
 $candidates = @(
     (Get-Location).Path,
     "$PSScriptRoot",
-    "D:\AnimeStudio",
-    "C:\AnimeStudio",
-    "E:\AnimeStudio",
-    "$env:USERPROFILE\AnimeStudio"
+    "$env:USERPROFILE\AnimeStudio",
+    "$env:USERPROFILE\AnimeSetup"
 )
+
+# Detect all currently mounted drives dynamically
+try {
+    $fsRoots = Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Root }
+    foreach ($r in $fsRoots) {
+        $candidates += (Join-Path $r "AnimeStudio" -ErrorAction SilentlyContinue)
+        $candidates += (Join-Path $r "AnimeSetup" -ErrorAction SilentlyContinue)
+    }
+} catch {}
 
 $installDir = $null
 foreach ($cand in $candidates) {
-    if ($cand -and (Test-Path (Join-Path $cand "scripts\anime_studio.py"))) {
-        $installDir = $cand
-        break
+    if ($cand -and (Test-Path $cand -ErrorAction SilentlyContinue)) {
+        $testScript = Join-Path $cand "scripts\anime_studio.py" -ErrorAction SilentlyContinue
+        if ($testScript -and (Test-Path $testScript -ErrorAction SilentlyContinue)) {
+            $installDir = $cand
+            break
+        }
     }
 }
 
@@ -77,6 +87,8 @@ if ($hasGit -and $isGitRepo) {
         "AnimeStudio.pyw",
         "Install_AnimeStudio.bat",
         "Launch_Anime_Studio.bat",
+        "Update_AnimeStudio.bat",
+        "update.ps1",
         "README.md"
     )
 
