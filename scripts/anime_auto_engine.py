@@ -148,13 +148,25 @@ def get_all_available_tracks():
 
 _SHUFFLE_QUEUE = []
 
+def get_short_path(path):
+    if not path or not os.path.exists(path):
+        return path
+    try:
+        buf = ctypes.create_unicode_buffer(500)
+        ret = ctypes.windll.kernel32.GetShortPathNameW(os.path.abspath(path), buf, 500)
+        return buf.value if ret > 0 else os.path.abspath(path)
+    except Exception:
+        return os.path.abspath(path)
+
 def get_next_category(filter_choice="all"):
     global _SHUFFLE_QUEUE
     if filter_choice and filter_choice != "all" and filter_choice in ANIME_CATALOG:
         return filter_choice
 
     if not _SHUFFLE_QUEUE:
-        categories = [k for k in ANIME_CATALOG.keys() if k != "12_Custom_Wallpapers" or get_category_wallpapers(k)]
+        categories = [k for k in ANIME_CATALOG.keys() if len(get_category_wallpapers(k)) > 0]
+        if not categories:
+            categories = list(ANIME_CATALOG.keys())
         random.shuffle(categories)
         _SHUFFLE_QUEUE = categories
 
@@ -180,13 +192,13 @@ def get_category_wallpapers(category_name):
 def set_wallpaper_win32(path):
     if not path or not os.path.exists(path):
         return False
-    # If path is gif or unsupported directly by win32, extract crisp frame as png cache
-    if path.lower().endswith('.gif'):
+    # If path is gif, webp, or bmp, cache as clean 24-bit RGB PNG for 100% Windows compatibility
+    if path.lower().endswith(('.gif', '.webp', '.bmp')):
         try:
             from PIL import Image
             cache_dir = os.path.join(BASE_DIR, "wallpapers", ".cache")
             os.makedirs(cache_dir, exist_ok=True)
-            cache_path = os.path.join(cache_dir, os.path.splitext(os.path.basename(path))[0] + "_frame.png")
+            cache_path = os.path.join(cache_dir, os.path.splitext(os.path.basename(path))[0] + "_cached.png")
             with Image.open(path) as img:
                 img.convert("RGB").save(cache_path, "PNG")
             path = cache_path
@@ -224,10 +236,11 @@ def play_audio(audio_path, duration_limit=None):
         if _AUDIO_STOP_TIMER and _AUDIO_STOP_TIMER.is_alive():
             _AUDIO_STOP_TIMER.cancel()
 
+        short_p = get_short_path(audio_path)
         mci = ctypes.windll.winmm.mciSendStringW
         mci("stop all", None, 0, None)
         mci("close all", None, 0, None)
-        mci(f'open "{os.path.abspath(audio_path)}" type mpegvideo alias anime_auto_sound', None, 0, None)
+        mci(f'open "{short_p}" type mpegvideo alias anime_auto_sound', None, 0, None)
         mci("play anime_auto_sound", None, 0, None)
 
         if duration_limit and duration_limit > 0:
@@ -289,10 +302,10 @@ def change_wallpaper_now(settings=None, force=False):
 
     wp_path = random.choice(wallpapers)
 
-    # Audio Mode
-    song_mode = settings.get("song_mode", "match_anime")
-    sound_enabled = settings.get("sound_enabled", True)
-    display_song_name = "Audio Muted"
+    # STRICT AUDIO MODE: Only play if sound_enabled is True AND song_mode is not mute!
+    song_mode = settings.get("song_mode", "mute")
+    sound_enabled = settings.get("sound_enabled", False)
+    display_song_name = "Audio Muted (Silent)"
 
     all_tracks = get_all_available_tracks()
     play_full = settings.get("play_full_song", False)
@@ -316,10 +329,10 @@ def change_wallpaper_now(settings=None, force=False):
             display_song_name = meta.get("song_name", "Anime Theme")
 
         audio_path = resolve_audio_path(track_key)
-        # CRUCIAL BUG FIX: If not playing full song, ALWAYS auto-stop after trans_dur seconds!
-        limit = None if play_full else trans_dur
+        limit = None if play_full else max(1, trans_dur)
         play_audio(audio_path, duration_limit=limit)
     else:
+        # 100% SILENT
         stop_audio()
 
     show_visual = settings.get("show_visual_transition", False)

@@ -23,15 +23,16 @@ DEFAULT_SETTINGS = {
     "interval_seconds": 30,
     "last_change_timestamp": time.time(),
     "next_change_timestamp": time.time() + 30,
-    "song_mode": "match_anime",
+    "song_mode": "mute",
     "specific_song": "one_piece_overtaken.mp3",
     "anime_filter": "all",
-    "show_visual_transition": True,
+    "show_visual_transition": False,
     "transition_duration": 5,
     "play_full_song": False,
-    "sound_enabled": True,
+    "sound_enabled": False,
     "auto_mode_enabled": True,
-    "run_at_startup": False
+    "run_at_startup": False,
+    "minimize_to_tray_on_close": False
 }
 
 def convert_to_seconds(value, unit):

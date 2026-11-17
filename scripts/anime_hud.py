@@ -47,8 +47,8 @@ class AnimeHUD:
 
         self.settings = anime_settings.load_settings()
         self.auto_change_enabled = self.settings.get("auto_mode_enabled", True)
-        self.sound_enabled = self.settings.get("sound_enabled", True)
-        self.animation_enabled = self.settings.get("show_visual_transition", True)
+        self.sound_enabled = self.settings.get("sound_enabled", False)
+        self.animation_enabled = self.settings.get("show_visual_transition", False)
         self.is_changing = False
 
         self.setup_ui()

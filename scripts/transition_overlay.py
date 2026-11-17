@@ -15,6 +15,7 @@ def run_overlay(wp_path, title_text, char_text, song_name, duration_sec=5, video
                 "-noborder",
                 "-alwaysontop",
                 "-autoexit",
+                "-an",
                 "-t", str(duration_sec),
                 "-loglevel", "quiet",
                 video_path

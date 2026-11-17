@@ -121,8 +121,8 @@ class AnimeStudioApp:
 
         self.settings = anime_settings.load_settings()
         self.auto_change_enabled = self.settings.get("auto_mode_enabled", True)
-        self.sound_enabled = self.settings.get("sound_enabled", True)
-        self.animation_enabled = self.settings.get("show_visual_transition", True)
+        self.sound_enabled = self.settings.get("sound_enabled", False)
+        self.animation_enabled = self.settings.get("show_visual_transition", False)
         self.is_changing = False
 
         # Reset past schedule on startup so it doesn't immediately change on boot
@@ -146,6 +146,8 @@ class AnimeStudioApp:
         self.filter_to_custom_var = tk.BooleanVar(value=True)
         self.custom_wallpapers_list = []
         self.custom_img_refs = []
+        self.gal_current_page = 0
+        self.gal_page_size = 24
 
         # In-memory thumbnail cache for ultra-fast navigation
         self.thumb_cache = {}
@@ -325,6 +327,15 @@ class AnimeStudioApp:
         )
         self.lbl_sidebar_timer.pack(anchor="w", pady=(3, 0))
 
+        self.lbl_sound_badge = tk.Label(
+            status_box,
+            text="🔊 SOUND: ON" if self.sound_enabled else "🔇 SOUND: MUTED",
+            font=("Segoe UI", 7, "bold"),
+            fg="#ff0055" if self.sound_enabled else "#00f5d4",
+            bg="#17112e"
+        )
+        self.lbl_sound_badge.pack(anchor="w", pady=(3, 0))
+
         tk.Label(
             status_box,
             text="🖼️ 301+ UHD 4K Wallpapers",
@@ -376,11 +387,26 @@ class AnimeStudioApp:
         lbl_head = tk.Label(top_row, text="DASHBOARD & LIVE MONITOR", font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#0c0a18")
         lbl_head.pack(side="left")
 
+        self.btn_master_sound = tk.Button(
+            top_row,
+            text="🔇 SOUND: MUTED (Silent)" if not self.sound_enabled else "🔊 SOUND: ACTIVE",
+            font=("Segoe UI", 8, "bold"),
+            bg="#1f183d" if not self.sound_enabled else "#ff0055",
+            fg="#00f5d4" if not self.sound_enabled else "#ffffff",
+            relief="flat",
+            cursor="hand2",
+            padx=10,
+            pady=3,
+            command=self.toggle_master_sound
+        )
+        self.btn_master_sound.pack(side="right", padx=(8, 0))
+        add_hover(self.btn_master_sound, "#1f183d", "#2d2358")
+
         stats_badge = tk.Label(
             top_row,
-            text="✨ 4K/5K/8K ULTRA HIGH-RES • ZERO COMPRESSION",
+            text="✨ 4K/5K/8K ULTRA HIGH-RES",
             font=("Segoe UI", 8, "bold"),
-            fg="#00f5d4",
+            fg="#ffe600",
             bg="#181232",
             padx=10,
             pady=3
@@ -594,6 +620,21 @@ class AnimeStudioApp:
         self.btn_hud_toggle.pack(side="left", expand=True, fill="x", padx=2)
         add_hover(self.btn_hud_toggle, "#7209b7", "#8415d1")
 
+        self.btn_quick_sound = tk.Button(
+            ctrl_row,
+            text="🔇 MUTE AUDIO" if self.sound_enabled else "🔊 ENABLE SOUND",
+            font=("Segoe UI", 9, "bold"),
+            bg="#4a4e69" if self.sound_enabled else "#20173d",
+            fg="#ffffff" if self.sound_enabled else "#00f5d4",
+            relief="flat",
+            cursor="hand2",
+            padx=12,
+            pady=7,
+            command=self.toggle_master_sound
+        )
+        self.btn_quick_sound.pack(side="left", expand=True, fill="x", padx=2)
+        add_hover(self.btn_quick_sound, "#20173d", "#2d2054")
+
         btn_random = tk.Button(
             ctrl_row,
             text="🎲 RANDOM 4K",
@@ -645,11 +686,35 @@ class AnimeStudioApp:
         cur_settings["anime_filter"] = "all"
         self.trigger_change_now()
 
+    def toggle_master_sound(self):
+        self.sound_enabled = not self.sound_enabled
+        if not self.sound_enabled:
+            anime_auto_engine.stop_audio()
+            anime_settings.update_setting("sound_enabled", False)
+            anime_settings.update_setting("song_mode", "mute")
+            self.btn_master_sound.config(text="🔇 SOUND: MUTED (Silent)", bg="#1f183d", fg="#00f5d4")
+            self.lbl_sound_badge.config(text="🔇 SOUND: MUTED", fg="#00f5d4")
+            self.btn_quick_sound.config(text="🔊 ENABLE SOUND", bg="#20173d", fg="#00f5d4")
+            self.lbl_active_song.config(text="Audio Muted (Silent Mode)")
+            self.lbl_eq_icon.config(text="[ 🔇 MUTED ]", fg="#8d88ab")
+        else:
+            anime_settings.update_setting("sound_enabled", True)
+            anime_settings.update_setting("song_mode", "match_anime")
+            self.btn_master_sound.config(text="🔊 SOUND: ACTIVE", bg="#ff0055", fg="#ffffff")
+            self.lbl_sound_badge.config(text="🔊 SOUND: ON", fg="#ff0055")
+            self.btn_quick_sound.config(text="🔇 MUTE AUDIO", bg="#4a4e69", fg="#ffffff")
+            self.lbl_eq_icon.config(text="[ ılı.lıllılı.ıllı ]", fg="#00f5d4")
+            self.play_current_active_audio()
+
     def play_current_active_audio(self):
-        if self.active_song_title and self.active_song_title != "None":
+        if not self.sound_enabled:
+            messagebox.showinfo("Audio Muted", "Sound is currently MUTED.\nClick 'ENABLE SOUND' on the dashboard if you want sound effects.")
+            return
+        if self.active_song_title and self.active_song_title != "None" and "Muted" not in self.active_song_title:
             track_p = anime_auto_engine.resolve_audio_path(self.active_song_title)
             if track_p:
-                anime_auto_engine.play_audio(track_p)
+                anime_auto_engine.play_audio(track_p, duration_limit=15)
+
 
     # ========================== TAB 2: CUSTOM WALLPAPERS ==========================
     def build_custom_tab(self):
@@ -763,6 +828,8 @@ class AnimeStudioApp:
             widget.destroy()
 
         self.custom_img_refs = []
+        self.gal_current_page = 0
+        self.gal_page_size = 24
         wps = anime_auto_engine.get_category_wallpapers("12_Custom_Wallpapers")
         self.custom_wallpapers_list = wps
 
@@ -1006,9 +1073,20 @@ class AnimeStudioApp:
         btn_open_folder.pack(side="right")
         add_hover(btn_open_folder, "#221e3b", "#2f2a52")
 
-        # Gallery Count & Status
-        self.lbl_gal_status = tk.Label(tab, text="Showing wallpapers...", font=("Segoe UI", 8, "bold"), fg="#00f5d4", bg="#0c0a17")
-        self.lbl_gal_status.pack(anchor="w", pady=(2, 4))
+        # Pagination & Status Row
+        pag_row = tk.Frame(tab, bg="#0c0a17")
+        pag_row.pack(fill="x", pady=(2, 4))
+
+        self.btn_gal_prev = tk.Button(pag_row, text="◀ Prev Page", font=("Segoe UI", 8, "bold"), bg="#1f183d", fg="#00f5d4", relief="flat", cursor="hand2", padx=10, pady=2, command=self.gallery_prev_page)
+        self.btn_gal_prev.pack(side="left")
+        add_hover(self.btn_gal_prev, "#1f183d", "#2d2358")
+
+        self.lbl_gal_status = tk.Label(pag_row, text="Showing wallpapers...", font=("Segoe UI", 8, "bold"), fg="#ffe600", bg="#0c0a17")
+        self.lbl_gal_status.pack(side="left", padx=12)
+
+        self.btn_gal_next = tk.Button(pag_row, text="Next Page ▶", font=("Segoe UI", 8, "bold"), bg="#1f183d", fg="#00f5d4", relief="flat", cursor="hand2", padx=10, pady=2, command=self.gallery_next_page)
+        self.btn_gal_next.pack(side="left")
+        add_hover(self.btn_gal_next, "#1f183d", "#2d2358")
 
         # Scrollable Gallery Grid Canvas
         self.gal_canvas = tk.Canvas(tab, bg="#0c0a17", highlightthickness=0)
@@ -1026,9 +1104,21 @@ class AnimeStudioApp:
         gal_scrollbar.pack(side="right", fill="y")
         self.gal_canvas.bind('<Configure>', lambda e: self.gal_canvas.itemconfig(self.gal_scroll_window, width=e.width))
 
-    def load_gallery_thumbnails(self):
+    def gallery_prev_page(self):
+        if self.gal_current_page > 0:
+            self.gal_current_page -= 1
+            self.load_gallery_thumbnails(reset_page=False)
+
+    def gallery_next_page(self):
+        self.gal_current_page += 1
+        self.load_gallery_thumbnails(reset_page=False)
+
+    def load_gallery_thumbnails(self, reset_page=True):
         if not hasattr(self, "gal_grid_frame"):
             return
+
+        if reset_page:
+            self.gal_current_page = 0
 
         for widget in self.gal_grid_frame.winfo_children():
             widget.destroy()
@@ -1043,12 +1133,28 @@ class AnimeStudioApp:
         else:
             wps = anime_auto_engine.get_category_wallpapers(cat_id)
 
-        self.lbl_gal_status.config(text=f"Showing {len(wps)} Wallpapers in '{self.gallery_cat_options[idx][0]}'")
+        total_wps = len(wps)
+        total_pages = max(1, (total_wps + self.gal_page_size - 1) // self.gal_page_size)
+        if self.gal_current_page >= total_pages:
+            self.gal_current_page = total_pages - 1
+        if self.gal_current_page < 0:
+            self.gal_current_page = 0
+
+        start_idx = self.gal_current_page * self.gal_page_size
+        end_idx = min(start_idx + self.gal_page_size, total_wps)
+        display_wps = wps[start_idx:end_idx]
+
+        if hasattr(self, "lbl_gal_status"):
+            self.lbl_gal_status.config(
+                text=f"Page {self.gal_current_page + 1} of {total_pages} (Showing {start_idx + 1}-{end_idx} of {total_wps} Wallpapers)"
+            )
+        if hasattr(self, "btn_gal_prev"):
+            self.btn_gal_prev.config(state="normal" if self.gal_current_page > 0 else "disabled")
+        if hasattr(self, "btn_gal_next"):
+            self.btn_gal_next.config(state="normal" if self.gal_current_page < total_pages - 1 else "disabled")
 
         self.gallery_img_refs = []
         cols = 4
-        # Limit initial load to 32 to guarantee fast UI responsiveness
-        display_wps = wps[:36]
 
         for i, wp_path in enumerate(display_wps):
             r = i // cols
@@ -1339,7 +1445,7 @@ class AnimeStudioApp:
             track_key = self.track_keys[idx]
             p = anime_auto_engine.resolve_audio_path(track_key)
             if p:
-                anime_auto_engine.play_audio(p)
+                anime_auto_engine.play_audio(p, duration_limit=15)
 
     def save_audio_settings(self):
         idx = self.audio_combo.current()
@@ -1508,8 +1614,7 @@ class AnimeStudioApp:
         res = messagebox.askyesno(
             "Update Anime Studio Pro",
             "Do you want to update Anime Studio Pro now?\n\n"
-            "• Updates scripts & installs latest features\n• Preserves all 301+ 4K wallpapers\n• Takes ~3-5 seconds",
-            "• Takes ~3-5 seconds"
+            "• Updates scripts & installs latest features\n• Preserves all 301+ 4K wallpapers\n• Takes ~3-5 seconds"
         )
         if res:
             try:
@@ -1531,11 +1636,14 @@ class AnimeStudioApp:
             remaining = next_ts - now
 
             if remaining <= 0:
-                self.trigger_change_now()
+                # Advance timestamp immediately so timer loop never multi-triggers
+                latest["next_change_timestamp"] = now + interval
+                anime_settings.save_settings(latest)
+                self.trigger_change_now(manual=False)
             else:
                 human_rem = anime_settings.format_seconds_to_human(remaining)
-                self.lbl_dash_timer.config(text=f"⏳ Next 4K Wallpaper: {human_rem}")
-                self.lbl_sidebar_timer.config(text=f"⏳ Next: {human_rem}")
+                self.lbl_dash_timer.config(text=f"⏳ Next 4K Wallpaper: {human_rem}", fg="#ffe600")
+                self.lbl_sidebar_timer.config(text=f"⏳ Next: {human_rem}", fg="#ffe600")
 
                 target_str = time.strftime("%a, %b %d %I:%M %p", time.localtime(next_ts))
                 self.lbl_dash_next_date.config(text=f"📅 Scheduled: {target_str}")
@@ -1546,10 +1654,14 @@ class AnimeStudioApp:
                 frac = max(0.0, min(1.0, remaining / float(interval)))
                 prog_w = int(w * frac)
                 self.canvas_dash_prog.coords(self.rect_dash_prog, 0, 0, prog_w, 8)
+        elif not self.auto_change_enabled:
+            self.lbl_dash_timer.config(text="🔴 Auto-Rotation is currently PAUSED", fg="#ff5964")
+            self.lbl_sidebar_timer.config(text="🔴 Paused", fg="#ff5964")
+            self.canvas_dash_prog.coords(self.rect_dash_prog, 0, 0, 0, 8)
 
         self.root.after(1000, self.update_timer_loop)
 
-    def trigger_change_now(self):
+    def trigger_change_now(self, manual=True):
         if self.is_changing:
             return
         self.is_changing = True
@@ -1558,7 +1670,7 @@ class AnimeStudioApp:
         cur_settings = anime_settings.load_settings()
 
         def worker():
-            wp_path, meta, song_name = anime_auto_engine.change_wallpaper_now(settings=cur_settings, force=True)
+            wp_path, meta, song_name = anime_auto_engine.change_wallpaper_now(settings=cur_settings, force=manual)
             self.root.after(0, lambda: self.on_change_completed(wp_path, meta, song_name))
 
         threading.Thread(target=worker, daemon=True).start()
