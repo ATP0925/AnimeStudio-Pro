@@ -164,6 +164,7 @@ if ($hasGit -and $isGitRepo) {
         "scripts/anime_hud.py",
         "scripts/create_shortcuts.py",
         "scripts/video_processor.py",
+        "scripts/transition_overlay.py",
         "AnimeStudio.pyw",
         "Install_AnimeStudio.bat",
         "Launch_Anime_Studio.bat",

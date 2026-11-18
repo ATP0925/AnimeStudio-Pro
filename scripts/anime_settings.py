@@ -32,7 +32,9 @@ DEFAULT_SETTINGS = {
     "sound_enabled": False,
     "auto_mode_enabled": True,
     "run_at_startup": False,
-    "minimize_to_tray_on_close": False
+    "minimize_to_tray_on_close": False,
+    "favorites": [],
+    "history": []
 }
 
 def convert_to_seconds(value, unit):
@@ -115,6 +117,105 @@ def register_next_change(interval_seconds=None):
     settings["next_change_timestamp"] = now + interval_seconds
     save_settings(settings)
     return settings
+
+
+# ==============================================================================
+# FAVORITES & BOOKMARKS SYSTEM
+# ==============================================================================
+
+def get_favorites():
+    settings = load_settings()
+    favs = settings.get("favorites", [])
+    valid = []
+    for p in favs:
+        if p and os.path.exists(p):
+            valid.append(os.path.abspath(p))
+    return valid
+
+def add_favorite(path):
+    if not path or not os.path.exists(path):
+        return False
+    abs_p = os.path.abspath(path)
+    settings = load_settings()
+    favs = settings.get("favorites", [])
+    if abs_p not in favs:
+        favs.append(abs_p)
+        settings["favorites"] = favs
+        save_settings(settings)
+    return True
+
+def remove_favorite(path):
+    if not path:
+        return False
+    abs_p = os.path.abspath(path)
+    settings = load_settings()
+    favs = settings.get("favorites", [])
+    changed = False
+    new_favs = []
+    for p in favs:
+        if os.path.abspath(p) == abs_p:
+            changed = True
+        else:
+            new_favs.append(p)
+    if changed:
+        settings["favorites"] = new_favs
+        save_settings(settings)
+    return True
+
+def is_favorite(path):
+    if not path:
+        return False
+    abs_p = os.path.abspath(path)
+    settings = load_settings()
+    favs = [os.path.abspath(p) for p in settings.get("favorites", []) if p]
+    return abs_p in favs
+
+def toggle_favorite(path):
+    if is_favorite(path):
+        remove_favorite(path)
+        return False
+    else:
+        add_favorite(path)
+        return True
+
+
+# ==============================================================================
+# DESKTOP WALLPAPER HISTORY & UNDO
+# ==============================================================================
+
+def get_history():
+    settings = load_settings()
+    hist = settings.get("history", [])
+    return [os.path.abspath(p) for p in hist if p and os.path.exists(p)]
+
+def push_history(path):
+    if not path or not os.path.exists(path):
+        return
+    abs_p = os.path.abspath(path)
+    settings = load_settings()
+    hist = settings.get("history", [])
+    if hist and os.path.abspath(hist[-1]) == abs_p:
+        return
+    hist.append(abs_p)
+    if len(hist) > 50:
+        hist = hist[-50:]
+    settings["history"] = hist
+    save_settings(settings)
+
+def pop_history():
+    """Pops the current wallpaper and returns the previous one for instant 1-click undo."""
+    settings = load_settings()
+    hist = settings.get("history", [])
+    if len(hist) >= 2:
+        hist.pop()  # remove currently active
+        prev = hist[-1]
+        settings["history"] = hist
+        save_settings(settings)
+        if os.path.exists(prev):
+            return prev
+    elif len(hist) == 1 and os.path.exists(hist[0]):
+        return hist[0]
+    return None
 
 def set_windows_startup(enable=True):
     startup_dir = os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs\Startup")

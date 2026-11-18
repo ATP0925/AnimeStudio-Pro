@@ -13,5 +13,7 @@
   "sound_enabled": false,
   "auto_mode_enabled": true,
   "run_at_startup": false,
-  "minimize_to_tray_on_close": false
+  "minimize_to_tray_on_close": false,
+  "favorites": [],
+  "history": []
 }

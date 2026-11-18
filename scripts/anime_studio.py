@@ -456,6 +456,21 @@ class AnimeStudioApp:
         )
         self.lbl_active_wp_name.pack(side="left")
 
+        self.btn_fav_dash = tk.Button(
+            preview_footer,
+            text="☆ Favorite",
+            font=("Segoe UI", 7, "bold"),
+            bg="#20173d",
+            fg="#ffe600",
+            relief="flat",
+            cursor="hand2",
+            padx=6,
+            pady=2,
+            command=self.toggle_active_favorite
+        )
+        self.btn_fav_dash.pack(side="right", padx=(0, 4))
+        add_hover(self.btn_fav_dash, "#20173d", "#2d2054")
+
         btn_open_file = tk.Button(
             preview_footer,
             text="📂 Open File",
@@ -541,7 +556,10 @@ class AnimeStudioApp:
         # Quick Theme Filter Row inside Info Card
         tk.Label(info_card, text="Quick Anime Switcher:", font=("Segoe UI", 8, "bold"), fg="#b8b5cb", bg="#16122a").pack(anchor="w", pady=(10, 2))
         self.dash_filter_combo = ttk.Combobox(info_card, state="readonly", font=("Segoe UI", 8))
-        self.dash_filter_options = [("🌐 All Anime (Balanced Shuffle)", "all")]
+        self.dash_filter_options = [
+            ("🌐 All Anime (Balanced Shuffle)", "all"),
+            ("⭐ Favorites Playlist (Your Starred)", "favorites"),
+        ]
         for k, v in anime_auto_engine.ANIME_CATALOG.items():
             self.dash_filter_options.append((f"{v['title']} ({v['char']})", k))
         self.dash_filter_combo['values'] = [opt[0] for opt in self.dash_filter_options]
@@ -635,6 +653,21 @@ class AnimeStudioApp:
         self.btn_quick_sound.pack(side="left", expand=True, fill="x", padx=2)
         add_hover(self.btn_quick_sound, "#20173d", "#2d2054")
 
+        btn_prev = tk.Button(
+            ctrl_row,
+            text="⏪ PREV (UNDO)",
+            font=("Segoe UI", 9, "bold"),
+            bg="#2b2353",
+            fg="#00f5d4",
+            relief="flat",
+            cursor="hand2",
+            padx=10,
+            pady=7,
+            command=self.trigger_undo_wallpaper
+        )
+        btn_prev.pack(side="left", expand=True, fill="x", padx=2)
+        add_hover(btn_prev, "#2b2353", "#3d3275")
+
         btn_random = tk.Button(
             ctrl_row,
             text="🎲 RANDOM 4K",
@@ -650,9 +683,12 @@ class AnimeStudioApp:
         btn_random.pack(side="left", expand=True, fill="x", padx=2)
         add_hover(btn_random, "#3a0ca3", "#4c16cb")
 
-        btn_add_custom_dash = tk.Button(
-            tab,
-            text="🎨 + ADD / IMPORT CUSTOM WALLPAPERS (DRAG & DROP READY)",
+        quick_import_row = tk.Frame(tab, bg="#0c0a17")
+        quick_import_row.pack(fill="x", pady=(8, 0))
+
+        btn_quick_add = tk.Button(
+            quick_import_row,
+            text="⚡ QUICK ADD WALLPAPER (BROWSE FILES)",
             font=("Segoe UI", 9, "bold"),
             bg="#00b4d8",
             fg="#0c0817",
@@ -661,10 +697,24 @@ class AnimeStudioApp:
             relief="flat",
             cursor="hand2",
             pady=8,
+            command=self.import_custom_images
+        )
+        btn_quick_add.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        add_hover(btn_quick_add, "#00b4d8", "#00f5d4")
+
+        btn_open_custom_tab = tk.Button(
+            quick_import_row,
+            text="🎨 CUSTOM STUDIO & DRAG-DROP",
+            font=("Segoe UI", 9, "bold"),
+            bg="#20173d",
+            fg="#00f5d4",
+            relief="flat",
+            cursor="hand2",
+            pady=8,
             command=lambda: self.show_tab("custom")
         )
-        btn_add_custom_dash.pack(fill="x", pady=(8, 0))
-        add_hover(btn_add_custom_dash, "#00b4d8", "#00f5d4")
+        btn_open_custom_tab.pack(side="left", fill="x", expand=True, padx=(4, 0))
+        add_hover(btn_open_custom_tab, "#20173d", "#2d2054")
 
     def on_dash_filter_changed(self, event=None):
         idx = self.dash_filter_combo.current()
@@ -673,6 +723,39 @@ class AnimeStudioApp:
             anime_settings.update_setting("anime_filter", cat_id)
             self.settings["anime_filter"] = cat_id
             self.trigger_change_now()
+
+    def toggle_active_favorite(self):
+        if not self.active_wallpaper_path:
+            return
+        is_fav = anime_settings.toggle_favorite(self.active_wallpaper_path)
+        if hasattr(self, "btn_fav_dash"):
+            if is_fav:
+                self.btn_fav_dash.config(text="★ Favorited", fg="#ffe600", bg="#3d2a00")
+            else:
+                self.btn_fav_dash.config(text="☆ Favorite", fg="#ffe600", bg="#20173d")
+        if hasattr(self, "refresh_custom_wallpapers_grid"):
+            self.refresh_custom_wallpapers_grid()
+
+    def toggle_card_favorite(self, path):
+        anime_settings.toggle_favorite(path)
+        if hasattr(self, "load_gallery_thumbnails"):
+            self.load_gallery_thumbnails(reset_page=False)
+        if hasattr(self, "refresh_custom_wallpapers_grid"):
+            self.refresh_custom_wallpapers_grid()
+        self.refresh_current_display()
+
+    def trigger_undo_wallpaper(self):
+        prev_wp, meta, song = anime_auto_engine.undo_previous_wallpaper()
+        if prev_wp:
+            self.active_wallpaper_path = prev_wp
+            self.active_meta = meta
+            self.active_song_title = song
+            self.refresh_current_display()
+            if hasattr(self, "refresh_custom_wallpapers_grid"):
+                self.refresh_custom_wallpapers_grid()
+            messagebox.showinfo("Wallpaper Reverted", f"Reverted desktop wallpaper to:\n{os.path.basename(prev_wp)}")
+        else:
+            messagebox.showinfo("Undo History", "No previous wallpaper found in history.")
 
     def open_active_file(self):
         if self.active_wallpaper_path and os.path.exists(self.active_wallpaper_path):
@@ -886,6 +969,21 @@ class AnimeStudioApp:
             btn_box = tk.Frame(card, bg="#16122a")
             btn_box.pack(fill="x", pady=(2, 0))
 
+            is_fav = anime_settings.is_favorite(wp_path)
+            btn_fav = tk.Button(
+                btn_box,
+                text="★" if is_fav else "☆",
+                font=("Segoe UI", 9, "bold"),
+                bg="#3d2a00" if is_fav else "#20173d",
+                fg="#ffe600" if is_fav else "#b8b5cb",
+                relief="flat",
+                cursor="hand2",
+                width=3,
+                pady=1,
+                command=lambda p=wp_path: self.toggle_card_favorite(p)
+            )
+            btn_fav.pack(side="left", padx=(0, 2))
+
             btn_set = tk.Button(btn_box, text="🚀 Set Desktop", font=("Segoe UI", 7, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", padx=6, pady=2, command=lambda p=wp_path: self.apply_specific_wallpaper(p))
             btn_set.pack(side="left", expand=True, fill="x", padx=(0, 2))
             add_hover(btn_set, "#2a9d8f", "#34b8a7")
@@ -914,7 +1012,7 @@ class AnimeStudioApp:
         if not filenames:
             return
 
-        valid_img_exts = ('.jpg', '.png', '.jpeg', '.webp', '.bmp', '.gif')
+        valid_img_exts = ('.jpg', '.png', '.jpeg', '.webp', '.bmp', '.gif', '.jfif', '.avif')
         valid_vid_exts = ('.mp4', '.webm', '.mkv', '.avi')
 
         dest_dir = os.path.join(BASE_DIR, "wallpapers", "collection", "12_Custom_Wallpapers")
@@ -1049,7 +1147,10 @@ class AnimeStudioApp:
 
         tk.Label(cat_row, text="Select Anime Series:", font=("Segoe UI", 8, "bold"), fg="#ffe600", bg="#16122a").pack(side="left")
 
-        self.gallery_cat_options = [("🌐 All Anime Universes (301+ Masterpieces)", "all")]
+        self.gallery_cat_options = [
+            ("🌐 All Anime Universes (301+ Masterpieces)", "all"),
+            ("⭐ Favorites Playlist (Your Starred)", "favorites"),
+        ]
         for k, v in anime_auto_engine.ANIME_CATALOG.items():
             count = len(anime_auto_engine.get_category_wallpapers(k))
             self.gallery_cat_options.append((f"{v['title']} ({count} Wallpapers)", k))
@@ -1130,6 +1231,8 @@ class AnimeStudioApp:
         if cat_id == "all":
             for k in anime_auto_engine.ANIME_CATALOG.keys():
                 wps.extend(anime_auto_engine.get_category_wallpapers(k))
+        elif cat_id == "favorites":
+            wps = anime_settings.get_favorites()
         else:
             wps = anime_auto_engine.get_category_wallpapers(cat_id)
 
@@ -1185,12 +1288,31 @@ class AnimeStudioApp:
             short_name = (base[:16] + "...") if len(base) > 19 else base
             tk.Label(card, text=short_name, font=("Segoe UI", 7, "italic"), fg="#b8b5cb", bg="#16122a").pack(anchor="w", pady=(2, 2))
 
-            btn_apply = tk.Button(card, text="🚀 Set Desktop", font=("Segoe UI", 7, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", pady=1, command=lambda p=wp_path: self.apply_specific_wallpaper(p))
-            btn_apply.pack(fill="x")
+            btn_box = tk.Frame(card, bg="#16122a")
+            btn_box.pack(fill="x")
+
+            is_fav = anime_settings.is_favorite(wp_path)
+            btn_fav = tk.Button(
+                btn_box,
+                text="★" if is_fav else "☆",
+                font=("Segoe UI", 9, "bold"),
+                bg="#3d2a00" if is_fav else "#20173d",
+                fg="#ffe600" if is_fav else "#b8b5cb",
+                relief="flat",
+                cursor="hand2",
+                width=3,
+                pady=1,
+                command=lambda p=wp_path: self.toggle_card_favorite(p)
+            )
+            btn_fav.pack(side="left", padx=(0, 2))
+
+            btn_apply = tk.Button(btn_box, text="🚀 Set Desktop", font=("Segoe UI", 7, "bold"), bg="#2a9d8f", fg="#ffffff", relief="flat", cursor="hand2", pady=1, command=lambda p=wp_path: self.apply_specific_wallpaper(p))
+            btn_apply.pack(side="left", fill="x", expand=True)
             add_hover(btn_apply, "#2a9d8f", "#34b8a7")
 
     def apply_specific_wallpaper(self, path):
         anime_auto_engine.set_wallpaper_win32(path)
+        anime_settings.push_history(path)
         self.active_wallpaper_path = path
         self.refresh_current_display()
         # Refresh borders
@@ -1698,6 +1820,12 @@ class AnimeStudioApp:
 
         if self.active_wallpaper_path and os.path.exists(self.active_wallpaper_path):
             self.lbl_active_wp_name.config(text=os.path.basename(self.active_wallpaper_path))
+            if hasattr(self, "btn_fav_dash"):
+                is_fav = anime_settings.is_favorite(self.active_wallpaper_path)
+                if is_fav:
+                    self.btn_fav_dash.config(text="★ Favorited", fg="#ffe600", bg="#3d2a00")
+                else:
+                    self.btn_fav_dash.config(text="☆ Favorite", fg="#ffe600", bg="#20173d")
             try:
                 im = Image.open(self.active_wallpaper_path)
                 w, h = im.size

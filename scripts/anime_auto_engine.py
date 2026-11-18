@@ -278,29 +278,60 @@ def change_wallpaper_now(settings=None, force=False):
         return None, None, None
 
     anime_filter = settings.get("anime_filter", "all")
-    category = get_next_category(anime_filter)
-    meta = ANIME_CATALOG.get(category, {
-        "title": category,
-        "char": "Anime Hero",
-        "song_name": "Anime Theme",
-        "audio_file": "one_piece_overtaken.mp3",
-        "voice_file": "original/luffy_gear5.mp3"
-    })
+    if anime_filter == "favorites":
+        favs = anime_settings.get_favorites()
+        if favs:
+            wp_path = random.choice(favs)
+            category = "Favorites"
+            for cat in ANIME_CATALOG.keys():
+                if cat in wp_path:
+                    category = cat
+                    break
+            meta = ANIME_CATALOG.get(category, {
+                "title": "Favorite Anime Wallpaper",
+                "char": os.path.splitext(os.path.basename(wp_path))[0],
+                "song_name": "Favorite Theme",
+                "audio_file": "one_piece_overtaken.mp3",
+                "voice_file": "original/luffy_gear5.mp3"
+            })
+            wallpapers = [wp_path]
+        else:
+            category = get_next_category("all")
+            meta = ANIME_CATALOG.get(category, {
+                "title": category,
+                "char": "Anime Hero",
+                "song_name": "Anime Theme",
+                "audio_file": "one_piece_overtaken.mp3",
+                "voice_file": "original/luffy_gear5.mp3"
+            })
+            wallpapers = get_category_wallpapers(category)
+            if not wallpapers:
+                return None, None, None
+            wp_path = random.choice(wallpapers)
+    else:
+        category = get_next_category(anime_filter)
+        meta = ANIME_CATALOG.get(category, {
+            "title": category,
+            "char": "Anime Hero",
+            "song_name": "Anime Theme",
+            "audio_file": "one_piece_overtaken.mp3",
+            "voice_file": "original/luffy_gear5.mp3"
+        })
 
-    wallpapers = get_category_wallpapers(category)
-    if not wallpapers:
-        for cat in ANIME_CATALOG.keys():
-            wps = get_category_wallpapers(cat)
-            if wps:
-                category = cat
-                meta = ANIME_CATALOG[cat]
-                wallpapers = wps
-                break
+        wallpapers = get_category_wallpapers(category)
+        if not wallpapers:
+            for cat in ANIME_CATALOG.keys():
+                wps = get_category_wallpapers(cat)
+                if wps:
+                    category = cat
+                    meta = ANIME_CATALOG[cat]
+                    wallpapers = wps
+                    break
 
-    if not wallpapers:
-        return None, None, None
+        if not wallpapers:
+            return None, None, None
 
-    wp_path = random.choice(wallpapers)
+        wp_path = random.choice(wallpapers)
 
     # STRICT AUDIO MODE: Only play if sound_enabled is True AND song_mode is not mute!
     song_mode = settings.get("song_mode", "mute")
@@ -337,8 +368,9 @@ def change_wallpaper_now(settings=None, force=False):
 
     show_visual = settings.get("show_visual_transition", False)
 
-    # Set wallpaper immediately
+    # Set wallpaper immediately and push to undo history
     set_wallpaper_win32(wp_path)
+    anime_settings.push_history(wp_path)
 
     # Launch visual transition as an isolated separate process (no Tkinter thread crashes!)
     if show_visual and trans_dur > 0 and os.path.exists(OVERLAY_SCRIPT):
@@ -380,6 +412,27 @@ def change_wallpaper_now(settings=None, force=False):
     anime_settings.register_next_change(settings.get("interval_seconds", 30))
 
     return wp_path, meta, display_song_name
+
+
+def undo_previous_wallpaper():
+    """Rolls back desktop wallpaper to the previously active wallpaper."""
+    prev_wp = anime_settings.pop_history()
+    if not prev_wp or not os.path.exists(prev_wp):
+        return None, None, None
+
+    set_wallpaper_win32(prev_wp)
+    category = "12_Custom_Wallpapers"
+    for cat in ANIME_CATALOG.keys():
+        if cat in prev_wp:
+            category = cat
+            break
+    meta = ANIME_CATALOG.get(category, {
+        "title": "Previous Wallpaper",
+        "char": os.path.splitext(os.path.basename(prev_wp))[0],
+        "song_name": "Silent",
+    })
+    return prev_wp, meta, "Audio Muted (Silent)"
+
 
 if __name__ == "__main__":
     wp, m, s = change_wallpaper_now(force=True)
