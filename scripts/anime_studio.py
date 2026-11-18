@@ -1677,6 +1677,79 @@ class AnimeStudioApp:
         btn_save_app.pack(fill="x", pady=(10, 0))
         add_hover(btn_save_app, "#2a9d8f", "#34b8a7")
 
+        # ========================== CLOUD STREAM MODE CARD ==========================
+        cloud_card = tk.Frame(tab, bg="#16122a", padx=16, pady=12, highlightbackground="#00f5d4", highlightthickness=1)
+        cloud_card.pack(fill="x", pady=(10, 0))
+
+        tk.Label(cloud_card, text="☁️ CLOUD STREAM MODE (ZERO-DISK ONLINE STREAMING)", font=("Segoe UI", 10, "bold"), fg="#00f5d4", bg="#16122a").pack(anchor="w")
+        tk.Label(cloud_card, text="Stream fresh SFW landscape 4K wallpapers on-the-fly from web sources without taking up hard drive space.", font=("Segoe UI", 8), fg="#b8b5cb", bg="#16122a").pack(anchor="w", pady=(1, 6))
+
+        # Mode Selector
+        mode_box = tk.Frame(cloud_card, bg="#16122a")
+        mode_box.pack(fill="x", pady=2)
+        tk.Label(mode_box, text="Active Mode:", font=("Segoe UI", 8, "bold"), fg="#ffe600", bg="#16122a").pack(side="left")
+
+        self.mode_var = tk.StringVar(value=self.settings.get("mode", "local"))
+        tk.Radiobutton(mode_box, text="📁 Local Collection (Offline 301+)", value="local", variable=self.mode_var, font=("Segoe UI", 8), bg="#16122a", fg="#ffffff", selectcolor="#7209b7", activebackground="#16122a", activeforeground="#00f5d4").pack(side="left", padx=8)
+        tk.Radiobutton(mode_box, text="☁️ Cloud Stream (Online Zero-Disk)", value="cloud", variable=self.mode_var, font=("Segoe UI", 8, "bold"), bg="#16122a", fg="#00f5d4", selectcolor="#00f5d4", activebackground="#16122a", activeforeground="#ffffff").pack(side="left", padx=8)
+
+        # Sources Checkboxes
+        cur_sources = self.settings.get("sources", {"wallhaven": True, "konachan": True, "reddit": False, "pinterest_manual": False})
+        self.src_wallhaven_var = tk.BooleanVar(value=cur_sources.get("wallhaven", True))
+        self.src_konachan_var = tk.BooleanVar(value=cur_sources.get("konachan", True))
+        self.src_reddit_var = tk.BooleanVar(value=cur_sources.get("reddit", False))
+        self.src_pinterest_var = tk.BooleanVar(value=cur_sources.get("pinterest_manual", False))
+
+        src_frame = tk.Frame(cloud_card, bg="#16122a")
+        src_frame.pack(fill="x", pady=(6, 2))
+        tk.Label(src_frame, text="Cloud Sources:", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#16122a").pack(side="left")
+
+        tk.Checkbutton(src_frame, text="Wallhaven (SFW)", variable=self.src_wallhaven_var, font=("Segoe UI", 8), fg="#00f5d4", bg="#16122a", selectcolor="#16122a", activebackground="#16122a").pack(side="left", padx=4)
+        tk.Checkbutton(src_frame, text="Konachan (SFW)", variable=self.src_konachan_var, font=("Segoe UI", 8), fg="#00f5d4", bg="#16122a", selectcolor="#16122a", activebackground="#16122a").pack(side="left", padx=4)
+        tk.Checkbutton(src_frame, text="Reddit (r/Animewallpaper)", variable=self.src_reddit_var, font=("Segoe UI", 8), fg="#00f5d4", bg="#16122a", selectcolor="#16122a", activebackground="#16122a").pack(side="left", padx=4)
+        tk.Checkbutton(src_frame, text="Pinterest (Experimental)", variable=self.src_pinterest_var, font=("Segoe UI", 8), fg="#8d88ab", bg="#16122a", selectcolor="#16122a", activebackground="#16122a").pack(side="left", padx=4)
+
+        # Interval Selector
+        int_frame = tk.Frame(cloud_card, bg="#16122a")
+        int_frame.pack(fill="x", pady=(6, 4))
+        tk.Label(int_frame, text="Cloud Interval:", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#16122a").pack(side="left")
+        self.cloud_interval_var = tk.IntVar(value=self.settings.get("interval_minutes", 10))
+        for m_lbl, m_val in [("10 Min", 10), ("30 Min", 30), ("60 Min", 60)]:
+            tk.Radiobutton(int_frame, text=m_lbl, value=m_val, variable=self.cloud_interval_var, font=("Segoe UI", 8), bg="#16122a", fg="#ffffff", selectcolor="#ff0055", activebackground="#16122a", activeforeground="#00f5d4").pack(side="left", padx=6)
+
+        # Pinterest Manual Trigger Row
+        pin_row = tk.Frame(cloud_card, bg="#16122a")
+        pin_row.pack(fill="x", pady=(4, 6))
+        btn_pin = tk.Button(
+            pin_row,
+            text="📌 Set from Pinterest URL (Experimental)",
+            font=("Segoe UI", 7, "bold"),
+            bg="#3d1e2e",
+            fg="#ff5964",
+            relief="flat",
+            cursor="hand2",
+            padx=8,
+            pady=3,
+            command=self.prompt_pinterest_url
+        )
+        btn_pin.pack(side="left")
+        add_hover(btn_pin, "#3d1e2e", "#54253e")
+
+        # Save Button
+        btn_save_cloud = tk.Button(
+            cloud_card,
+            text="💾 SAVE CLOUD STREAM SETTINGS",
+            font=("Segoe UI", 8, "bold"),
+            bg="#2a9d8f",
+            fg="#ffffff",
+            relief="flat",
+            cursor="hand2",
+            pady=5,
+            command=self.save_cloud_settings
+        )
+        btn_save_cloud.pack(fill="x", pady=(4, 0))
+        add_hover(btn_save_cloud, "#2a9d8f", "#34b8a7")
+
         # Update & Maintenance Card
         update_card = tk.Frame(tab, bg="#16122a", padx=16, pady=12, highlightbackground="#00b4d8", highlightthickness=1)
         update_card.pack(fill="x", pady=(10, 0))
@@ -1727,6 +1800,52 @@ class AnimeStudioApp:
         anime_settings.update_setting("minimize_to_tray_on_close", self.tray_close_var.get())
         messagebox.showinfo("Saved", "App preferences updated successfully!")
 
+    def save_cloud_settings(self):
+        new_mode = self.mode_var.get()
+        int_mins = self.cloud_interval_var.get()
+        sources_dict = {
+            "wallhaven": self.src_wallhaven_var.get(),
+            "konachan": self.src_konachan_var.get(),
+            "reddit": self.src_reddit_var.get(),
+            "pinterest_manual": self.src_pinterest_var.get()
+        }
+        anime_settings.update_setting("mode", new_mode)
+        anime_settings.update_setting("interval_minutes", int_mins)
+        anime_settings.update_setting("sources", sources_dict)
+        anime_settings.register_next_change()
+        self.settings = anime_settings.load_settings()
+        messagebox.showinfo("Cloud Stream Settings", f"Mode set to: {new_mode.upper()}\nInterval: {int_mins} mins\nSettings saved successfully!")
+
+    def prompt_pinterest_url(self):
+        import tkinter.simpledialog as sd
+        pin_url = sd.askstring("Pinterest Wallpaper (Experimental)", "Enter Pinterest Pin or Image URL:\n(e.g., https://i.pinimg.com/736x/...)")
+        if not pin_url:
+            return
+
+        def worker():
+            try:
+                import cloud_sources
+                self.lbl_dash_timer.config(text="📌 Fetching Pinterest Wallpaper...", fg="#00f5d4")
+                success = cloud_sources.set_from_pinterest_url(pin_url.strip())
+                if success:
+                    info = cloud_sources.get_last_streamed_info()
+                    wp_path = info.get("path")
+                    meta = {
+                        "title": "Pinterest Wallpaper",
+                        "char": "Experimental Stream",
+                        "song_name": "Pinterest",
+                        "audio_file": "one_piece_overtaken.mp3",
+                        "voice_file": "original/luffy_gear5.mp3"
+                    }
+                    self.root.after(0, lambda: self.on_change_completed(wp_path, meta, "Audio Muted (Silent)"))
+                    self.root.after(0, lambda: messagebox.showinfo("Success", "Pinterest wallpaper applied successfully!"))
+                else:
+                    self.root.after(0, lambda: messagebox.showwarning("Notice", "Could not set Pinterest image.\nMake sure URL is valid and image is landscape (width >= 1920, height >= 1080)."))
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Pinterest error:\n{e}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def trigger_inapp_update(self):
         update_script = os.path.join(BASE_DIR, "update.ps1")
         if not os.path.exists(update_script):
@@ -1752,7 +1871,11 @@ class AnimeStudioApp:
         latest = anime_settings.load_settings()
         now = time.time()
         next_ts = latest.get("next_change_timestamp", now + 30)
-        interval = max(5, latest.get("interval_seconds", 30))
+        mode = latest.get("mode", "local")
+        if mode == "cloud":
+            interval = max(60, latest.get("interval_minutes", 10) * 60)
+        else:
+            interval = max(5, latest.get("interval_seconds", 30))
 
         if self.auto_change_enabled and not self.is_changing:
             remaining = next_ts - now
@@ -1764,7 +1887,8 @@ class AnimeStudioApp:
                 self.trigger_change_now(manual=False)
             else:
                 human_rem = anime_settings.format_seconds_to_human(remaining)
-                self.lbl_dash_timer.config(text=f"⏳ Next 4K Wallpaper: {human_rem}", fg="#ffe600")
+                mode_str = "Cloud Stream" if mode == "cloud" else "4K Wallpaper"
+                self.lbl_dash_timer.config(text=f"⏳ Next {mode_str}: {human_rem}", fg="#ffe600")
                 self.lbl_sidebar_timer.config(text=f"⏳ Next: {human_rem}", fg="#ffe600")
 
                 target_str = time.strftime("%a, %b %d %I:%M %p", time.localtime(next_ts))
@@ -1799,14 +1923,16 @@ class AnimeStudioApp:
 
     def on_change_completed(self, wp_path, meta, song_name):
         self.is_changing = False
-        self.active_wallpaper_path = wp_path
-        self.active_meta = meta
-        self.active_song_title = song_name
-        self.refresh_current_display()
+        if wp_path:
+            self.active_wallpaper_path = wp_path
+            self.active_meta = meta
+            self.active_song_title = song_name
+            self.refresh_current_display()
 
         latest = anime_settings.load_settings()
         rem = latest.get("next_change_timestamp", time.time() + 30) - time.time()
-        self.lbl_dash_timer.config(text=f"⏳ Next 4K Wallpaper: {anime_settings.format_seconds_to_human(rem)}", fg="#ffe600")
+        mode_str = "Cloud Stream" if latest.get("mode") == "cloud" else "4K Wallpaper"
+        self.lbl_dash_timer.config(text=f"⏳ Next {mode_str}: {anime_settings.format_seconds_to_human(rem)}", fg="#ffe600")
 
     def refresh_current_display(self):
         if self.active_wallpaper_path and "12_Custom_Wallpapers" in self.active_wallpaper_path:

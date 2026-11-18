@@ -277,6 +277,52 @@ def change_wallpaper_now(settings=None, force=False):
         stop_audio()
         return None, None, None
 
+    # CLOUD STREAM MODE DISPATCH
+    if settings.get("mode") == "cloud":
+        try:
+            import cloud_sources
+            enabled = settings.get("sources", {"wallhaven": True, "konachan": True, "reddit": False})
+            success = cloud_sources.next_wallpaper(enabled_sources=enabled)
+            if success:
+                info = cloud_sources.get_last_streamed_info()
+                wp_path = info.get("path")
+                src = (info.get("source") or "Online").capitalize()
+                meta = {
+                    "title": f"Cloud Stream ({src})",
+                    "char": f"Streaming from {src}",
+                    "song_name": "Online Anime Stream",
+                    "audio_file": "one_piece_overtaken.mp3",
+                    "voice_file": "original/luffy_gear5.mp3"
+                }
+                if wp_path:
+                    anime_settings.push_history(wp_path)
+
+                song_mode = settings.get("song_mode", "mute")
+                sound_enabled = settings.get("sound_enabled", False)
+                display_song_name = "Audio Muted (Silent)"
+                if sound_enabled and song_mode != "mute":
+                    all_tracks = get_all_available_tracks()
+                    track_key = settings.get("specific_song", "one_piece_overtaken.mp3")
+                    display_song_name = all_tracks.get(track_key, track_key)
+                    audio_path = resolve_audio_path(track_key)
+                    play_full = settings.get("play_full_song", False)
+                    trans_dur = settings.get("transition_duration", 5)
+                    limit = None if play_full else max(1, trans_dur)
+                    play_audio(audio_path, duration_limit=limit)
+                else:
+                    stop_audio()
+
+                int_sec = settings.get("interval_minutes", 10) * 60
+                anime_settings.register_next_change(int_sec)
+                return wp_path, meta, display_song_name
+            else:
+                int_sec = settings.get("interval_minutes", 10) * 60
+                anime_settings.register_next_change(int_sec)
+                return None, None, None
+        except Exception as e:
+            print(f"Cloud stream dispatch error: {e}")
+            return None, None, None
+
     anime_filter = settings.get("anime_filter", "all")
     if anime_filter == "favorites":
         favs = anime_settings.get_favorites()

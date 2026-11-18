@@ -18,6 +18,14 @@ UNIT_MULTIPLIERS = {
 }
 
 DEFAULT_SETTINGS = {
+    "mode": "local",
+    "interval_minutes": 10,
+    "sources": {
+        "wallhaven": True,
+        "konachan": True,
+        "reddit": False,
+        "pinterest_manual": False
+    },
     "interval_value": 30,
     "interval_unit": "seconds",
     "interval_seconds": 30,
@@ -112,7 +120,10 @@ def register_next_change(interval_seconds=None):
     settings = load_settings()
     now = time.time()
     if interval_seconds is None:
-        interval_seconds = settings.get("interval_seconds", 30)
+        if settings.get("mode") == "cloud":
+            interval_seconds = settings.get("interval_minutes", 10) * 60
+        else:
+            interval_seconds = settings.get("interval_seconds", 30)
     settings["last_change_timestamp"] = now
     settings["next_change_timestamp"] = now + interval_seconds
     save_settings(settings)

@@ -20,6 +20,7 @@ config/startup_debug.log
 wallpapers/purged_cheap_or_vertical/
 wallpapers/archive_neo_tokyo/
 wallpapers/streamed/
+wallpapers/.cache/
 
 # User custom wallpapers & temporary video captures
 wallpapers/collection/12_Custom_Wallpapers/*
